@@ -1,0 +1,591 @@
+:root {
+  color-scheme: dark;
+  --ink: #05070b;
+  --panel: rgba(8, 12, 18, 0.9);
+  --panel-strong: rgba(5, 8, 13, 0.97);
+  --text: #f2f7f8;
+  --muted: #9baab1;
+  --cyan: #38eff0;
+  --cyan-soft: rgba(56, 239, 240, 0.18);
+  --magenta: #f044bd;
+  --magenta-soft: rgba(240, 68, 189, 0.16);
+  --orange: #ff7547;
+  --platinum: #f7f4df;
+  --edge: rgba(199, 232, 235, 0.2);
+  --stage-max: 1440px;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 50% 22%, rgba(42, 63, 74, 0.3), transparent 38%),
+    radial-gradient(circle at 18% 84%, rgba(56, 239, 240, 0.07), transparent 28%),
+    radial-gradient(circle at 84% 15%, rgba(240, 68, 189, 0.06), transparent 26%),
+    var(--ink);
+}
+
+button {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding:
+    max(0.5rem, env(safe-area-inset-top))
+    max(0.5rem, env(safe-area-inset-right))
+    max(0.5rem, env(safe-area-inset-bottom))
+    max(0.5rem, env(safe-area-inset-left));
+  place-items: center;
+}
+
+.game-stage {
+  position: relative;
+  isolation: isolate;
+  width: min(calc(100vw - 1rem), var(--stage-max), calc((100dvh - 1rem) * 16 / 9));
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(29, 42, 49, 0.72), rgba(6, 9, 14, 0.96) 61%),
+    #080b10;
+  border: 1px solid var(--edge);
+  border-radius: clamp(0.45rem, 1vw, 1rem);
+  box-shadow:
+    0 1.5rem 5rem rgba(0, 0, 0, 0.5),
+    0 0 2.5rem rgba(56, 239, 240, 0.045),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  outline: none;
+  touch-action: none;
+}
+
+#game:focus-visible {
+  box-shadow:
+    inset 0 0 0 3px var(--platinum),
+    inset 0 0 0 5px rgba(5, 7, 11, 0.9);
+}
+
+.canvas-vignette {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(56, 239, 240, 0.025), transparent 22%, transparent 78%, rgba(240, 68, 189, 0.025)),
+    radial-gradient(ellipse at center, transparent 63%, rgba(0, 0, 0, 0.25));
+  box-shadow: inset 0 0 3rem rgba(0, 0, 0, 0.35);
+}
+
+.start-overlay {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  overflow: auto;
+  padding: clamp(0.6rem, 3vw, 2rem);
+  place-items: center;
+  background:
+    linear-gradient(90deg, rgba(2, 4, 8, 0.96), rgba(5, 8, 13, 0.82) 52%, rgba(5, 6, 10, 0.92)),
+    radial-gradient(circle at 62% 42%, var(--magenta-soft), transparent 28%);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 239, 240, 0.45) transparent;
+}
+
+.start-panel {
+  width: min(92%, 42rem);
+  max-height: 100%;
+  padding: clamp(0.8rem, 2.6vw, 2rem);
+  overflow: auto;
+  background:
+    linear-gradient(135deg, rgba(9, 14, 21, 0.96), rgba(5, 8, 13, 0.9)),
+    var(--panel-strong);
+  border: 1px solid rgba(56, 239, 240, 0.24);
+  border-left-color: rgba(56, 239, 240, 0.7);
+  border-radius: clamp(0.45rem, 1.2vw, 0.9rem);
+  box-shadow:
+    -0.35rem 0 1.6rem rgba(56, 239, 240, 0.08),
+    0.35rem 0 1.6rem rgba(240, 68, 189, 0.06),
+    0 1rem 3rem rgba(0, 0, 0, 0.42);
+  text-align: center;
+}
+
+.start-panel h1 {
+  margin: 0;
+  color: var(--platinum);
+  font-size: clamp(1.8rem, min(6vw, 8vh), 4.8rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 0.95;
+  text-transform: uppercase;
+  text-shadow:
+    -0.04em 0 rgba(56, 239, 240, 0.42),
+    0.04em 0 rgba(240, 68, 189, 0.34);
+}
+
+.game-hook {
+  max-width: 36rem;
+  margin: clamp(0.5rem, 1.6vw, 1rem) auto 0;
+  color: #d5dfe2;
+  font-size: clamp(0.78rem, 1.4vw, 1rem);
+  line-height: 1.55;
+}
+
+.input-prompt {
+  display: flex;
+  margin: clamp(0.65rem, 2vw, 1.25rem) 0;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(0.35rem, 1vw, 0.7rem) clamp(0.7rem, 2vw, 1.15rem);
+}
+
+.input-actions {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.25rem, 0.7vw, 0.45rem);
+}
+
+.input-action {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: clamp(0.22rem, 0.7vw, 0.42rem);
+  color: #c7d3d6;
+  font-size: clamp(0.75rem, 1.25vw, 0.88rem);
+  font-weight: 720;
+  letter-spacing: 0.06em;
+}
+
+.input-divider {
+  color: rgba(56, 239, 240, 0.55);
+}
+
+.input-start {
+  color: var(--platinum);
+  font-size: clamp(0.78rem, 1.45vw, 1rem);
+  letter-spacing: 0.055em;
+}
+
+.input-start::before {
+  margin-right: 0.5em;
+  color: var(--magenta);
+  content: "—";
+}
+
+kbd {
+  display: inline-grid;
+  min-width: 2.15rem;
+  min-height: 1.6rem;
+  padding: 0.18rem 0.48rem;
+  place-items: center;
+  color: var(--platinum);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(56, 239, 240, 0.38);
+  border-bottom-color: rgba(56, 239, 240, 0.72);
+  border-radius: 0.32rem;
+  font-family: inherit;
+  font-size: clamp(0.72rem, 1.4vw, 0.92rem);
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  box-shadow: 0 0.18rem 0 rgba(56, 239, 240, 0.09);
+}
+
+.start-button {
+  min-height: 2.25rem;
+  padding: 0.48rem 0.95rem;
+  cursor: pointer;
+  color: #b9c7ca;
+  background: rgba(5, 10, 15, 0.58);
+  border: 1px solid rgba(199, 232, 235, 0.28);
+  border-radius: 0.45rem;
+  font-size: clamp(0.7rem, 1.1vw, 0.8rem);
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  opacity: 0.72;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.start-button:hover,
+.start-button:focus-visible {
+  color: var(--platinum);
+  background: rgba(8, 15, 21, 0.92);
+  border-color: rgba(56, 239, 240, 0.72);
+  opacity: 1;
+}
+
+.start-button:active {
+  transform: translateY(1px);
+}
+
+.mute-button {
+  position: absolute;
+  z-index: 6;
+  right: clamp(0.45rem, 1.2vw, 0.9rem);
+  bottom: clamp(0.45rem, 1.2vw, 0.9rem);
+  display: inline-flex;
+  min-height: 2.35rem;
+  padding: 0.48rem 0.72rem;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  color: #dce7e9;
+  background: rgba(5, 9, 14, 0.72);
+  border: 1px solid rgba(199, 232, 235, 0.24);
+  border-radius: 999px;
+  font-size: clamp(0.68rem, 1vw, 0.78rem);
+  letter-spacing: 0.04em;
+  opacity: 0.72;
+  transition:
+    opacity 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.mute-button:hover,
+.mute-button:focus-visible {
+  opacity: 1;
+  background: rgba(8, 14, 20, 0.94);
+  border-color: rgba(56, 239, 240, 0.7);
+}
+
+.mute-button[aria-pressed="true"] {
+  color: #ffc1ad;
+  border-color: rgba(255, 117, 71, 0.52);
+}
+
+.mute-mark {
+  width: 0.62rem;
+  height: 0.62rem;
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 0.7rem currentColor;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--platinum);
+  outline-offset: 3px;
+}
+
+.touch-controls {
+  position: absolute;
+  z-index: 4;
+  inset: auto clamp(0.55rem, 2vw, 1.1rem) clamp(0.55rem, 2vw, 1.1rem);
+  display: none;
+  align-items: end;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.touch-dpad {
+  display: grid;
+  grid-template: repeat(3, var(--touch-size)) / repeat(3, var(--touch-size));
+  gap: 0.16rem;
+}
+
+.touch-actions {
+  display: flex;
+  align-items: end;
+  gap: clamp(0.4rem, 2vw, 0.8rem);
+}
+
+.touch-button {
+  display: grid;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  place-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  pointer-events: auto;
+  color: rgba(238, 249, 250, 0.92);
+  background: rgba(5, 10, 15, 0.68);
+  border: 1px solid rgba(56, 239, 240, 0.42);
+  border-radius: 0.55rem;
+  font-size: clamp(0.82rem, 2.8vw, 1rem);
+  font-weight: 750;
+  box-shadow:
+    0 0 0.85rem rgba(56, 239, 240, 0.08),
+    inset 0 0 0.75rem rgba(56, 239, 240, 0.06);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-button:active,
+.touch-button.is-active {
+  color: #041011;
+  background: var(--cyan);
+  border-color: var(--platinum);
+}
+
+.touch-up {
+  grid-area: 1 / 2;
+}
+
+.touch-left {
+  grid-area: 2 / 1;
+}
+
+.touch-down {
+  grid-area: 2 / 2;
+}
+
+.touch-right {
+  grid-area: 2 / 3;
+}
+
+.touch-attack,
+.touch-dash {
+  width: calc(var(--touch-size) * 1.25);
+  height: calc(var(--touch-size) * 1.25);
+  border-radius: 50%;
+}
+
+.touch-dash {
+  color: #ffd9f4;
+  border-color: rgba(240, 68, 189, 0.64);
+  box-shadow:
+    0 0 0.85rem rgba(240, 68, 189, 0.12),
+    inset 0 0 0.75rem rgba(240, 68, 189, 0.09);
+}
+
+.touch-dash:active,
+.touch-dash.is-active {
+  color: #14040f;
+  background: var(--magenta);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@media (any-pointer: coarse) {
+  .input-action kbd {
+    display: none;
+  }
+
+  .touch-controls {
+    --touch-size: clamp(2.75rem, min(10vw, 12vh), 4.2rem);
+    z-index: 7;
+    display: flex;
+  }
+
+  .mute-button {
+    top: clamp(0.4rem, 1.2vw, 0.75rem);
+    bottom: auto;
+  }
+}
+
+@media (max-width: 42rem) {
+  .game-stage {
+    border-radius: 0.45rem;
+  }
+
+  .start-panel {
+    width: 98%;
+  }
+
+  .input-action {
+    letter-spacing: 0.03em;
+  }
+
+  .mute-copy {
+    display: none;
+  }
+
+  .mute-button {
+    width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+@media (max-aspect-ratio: 1 / 1) {
+  .start-overlay {
+    padding: 0.22rem;
+  }
+
+  .start-panel {
+    width: calc(100% - 0.4rem);
+    padding: 0.28rem 0.5rem;
+  }
+
+  .start-panel h1 {
+    font-size: clamp(1.15rem, 7vw, 1.5rem);
+    letter-spacing: 0.06em;
+  }
+
+  .game-hook {
+    margin-top: 0.18rem;
+    font-size: clamp(0.7rem, 3vw, 0.76rem);
+    line-height: 1.25;
+  }
+
+  .input-prompt {
+    gap: 0.15rem 0.5rem;
+    margin-block: 0.24rem;
+  }
+
+  .input-actions {
+    gap: 0.22rem;
+  }
+
+  .input-action {
+    gap: 0.2rem;
+  }
+
+  .input-action,
+  .input-divider,
+  .input-start {
+    font-size: 0.75rem;
+  }
+
+  kbd {
+    min-height: 1.1rem;
+    padding: 0.08rem 0.3rem;
+    font-size: 0.75rem;
+    box-shadow: none;
+  }
+
+  .start-button {
+    min-height: 1.75rem;
+    padding: 0.22rem 0.75rem;
+    font-size: 0.68rem;
+    opacity: 0.62;
+  }
+
+  .mute-button {
+    top: 0.25rem;
+    right: 0.25rem;
+    bottom: auto;
+    width: 2.2rem;
+    min-height: 2.2rem;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+@media (max-height: 34rem) {
+  .start-overlay {
+    padding: 0.35rem;
+  }
+
+  .start-panel {
+    width: min(96%, 38rem);
+    padding: 0.55rem 0.75rem;
+  }
+
+  .start-panel h1 {
+    font-size: clamp(1.45rem, 9vh, 2.6rem);
+  }
+
+  .game-hook {
+    margin-top: 0.35rem;
+    font-size: clamp(0.66rem, 2.6vh, 0.78rem);
+    line-height: 1.35;
+  }
+
+  .input-prompt {
+    margin-block: 0.42rem;
+  }
+
+  .input-actions {
+    gap: 0.3rem;
+  }
+
+  kbd {
+    min-height: 1.35rem;
+    padding-block: 0.12rem;
+  }
+
+  .start-button {
+    min-height: 1.9rem;
+    padding-block: 0.32rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .game-stage,
+  .start-panel,
+  .mute-button,
+  .touch-button {
+    border-color: currentColor;
+  }
+
+  .game-hook,
+  .input-action {
+    color: var(--text);
+  }
+}
+
+@media (forced-colors: active) {
+  .canvas-vignette {
+    display: none;
+  }
+
+  .start-button,
+  .mute-button,
+  .touch-button {
+    forced-color-adjust: auto;
+  }
+}
