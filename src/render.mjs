@@ -143,7 +143,10 @@ function drawExploreWarning(ctx, state, now) {
   if (state.phase !== PHASE.EXPLORE || !state.explore) return;
   const centerX = projectWorld({ x: state.explore.lineX, y: 0 }).x;
   const width = CONFIG.exploreLaneHalfWidth * VIEW.scaleX * 2;
-  const pulse = 0.16 + Math.sin(now * 18) * 0.045;
+  const remainingRatio = Math.max(0, Math.min(1, state.phaseTime / 0.55));
+  const urgency = 1 - remainingRatio;
+  const flash = 0.5 + Math.sin(now * (18 + urgency * 18)) * 0.5;
+  const pulse = 0.14 + urgency * 0.13 + flash * 0.06;
 
   ctx.save();
   clipArena(ctx);
@@ -156,13 +159,26 @@ function drawExploreWarning(ctx, state, now) {
   ctx.fillStyle = gradient;
   ctx.fillRect(centerX - width / 2, VIEW.centerY - 250, width, 500);
   ctx.strokeStyle = COLORS.orange;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2.5 + urgency * 2;
+  ctx.shadowColor = COLORS.orange;
+  ctx.shadowBlur = urgency * 16;
   ctx.setLineDash([12, 8]);
   ctx.beginPath();
   ctx.moveTo(centerX - width / 2, VIEW.centerY - 235);
   ctx.lineTo(centerX - width / 2, VIEW.centerY + 235);
   ctx.moveTo(centerX + width / 2, VIEW.centerY - 235);
   ctx.lineTo(centerX + width / 2, VIEW.centerY + 235);
+  ctx.stroke();
+
+  const shutterOffset = 215 * remainingRatio;
+  ctx.setLineDash([]);
+  ctx.strokeStyle = `rgba(247,244,223,${0.42 + urgency * 0.5})`;
+  ctx.lineWidth = 2 + urgency * 3;
+  ctx.beginPath();
+  ctx.moveTo(centerX - width / 2 - 8, VIEW.centerY - shutterOffset);
+  ctx.lineTo(centerX + width / 2 + 8, VIEW.centerY - shutterOffset);
+  ctx.moveTo(centerX - width / 2 - 8, VIEW.centerY + shutterOffset);
+  ctx.lineTo(centerX + width / 2 + 8, VIEW.centerY + shutterOffset);
   ctx.stroke();
   ctx.restore();
 }
@@ -264,10 +280,20 @@ function drawLockPrediction(ctx, state, now) {
   const origin = projectWorld(state.lock.origin);
   const boss = projectWorld(state.boss);
   const strike = state.phase === PHASE.PREDICTION;
-  const pulse = strike ? 0.3 + Math.sin(now * 25) * 0.12 : 0.18;
+  const resolved = state.phase === PHASE.CORE_OPEN;
+  const remainingRatio = strike
+    ? Math.max(0, Math.min(1, state.phaseTime / 0.55))
+    : 1;
+  const urgency = strike ? 1 - remainingRatio : 0;
+  const pulse = resolved
+    ? 0.04
+    : strike
+      ? 0.24 + urgency * 0.15 + Math.sin(now * (25 + urgency * 18)) * 0.1
+      : 0.18;
 
   ctx.save();
   clipArena(ctx);
+  ctx.globalAlpha = resolved ? 0.22 : 1;
 
   ctx.beginPath();
   ctx.moveTo(boss.x, boss.y - 24);
@@ -278,8 +304,8 @@ function drawLockPrediction(ctx, state, now) {
   ctx.fill();
 
   ctx.strokeStyle = COLORS.magenta;
-  ctx.lineWidth = strike ? 5 : 3;
-  ctx.setLineDash(strike ? [] : [15, 9]);
+  ctx.lineWidth = strike ? 5 + urgency * 2 : 3;
+  ctx.setLineDash(strike && !resolved ? [] : [15, 9]);
   ctx.beginPath();
   ctx.moveTo(boss.x, boss.y - 18);
   ctx.lineTo(center.x, center.y);
@@ -287,12 +313,12 @@ function drawLockPrediction(ctx, state, now) {
 
   ctx.setLineDash([8, 7]);
   ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.78;
+  ctx.globalAlpha = resolved ? 0.24 : 0.78;
   ctx.beginPath();
   ctx.moveTo(origin.x, origin.y);
   ctx.lineTo(center.x, center.y);
   ctx.stroke();
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = resolved ? 0.22 : 1;
   ctx.setLineDash([]);
 
   ctx.beginPath();
@@ -311,6 +337,26 @@ function drawLockPrediction(ctx, state, now) {
   ctx.lineWidth = strike ? 4 : 2;
   ctx.stroke();
 
+  if (strike) {
+    const countdownScale = 0.22 + remainingRatio * 0.78;
+    ctx.strokeStyle = `rgba(247,244,223,${0.55 + urgency * 0.4})`;
+    ctx.shadowColor = COLORS.magenta;
+    ctx.shadowBlur = 10 + urgency * 16;
+    ctx.lineWidth = 2 + urgency * 3;
+    ctx.beginPath();
+    ctx.ellipse(
+      center.x,
+      center.y,
+      CONFIG.lockZoneRadiusX * VIEW.scaleX * countdownScale,
+      CONFIG.lockZoneRadiusY * VIEW.scaleY * countdownScale,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
   ctx.strokeStyle = COLORS.magenta;
   ctx.lineWidth = 2;
   const cross = 15;
@@ -322,7 +368,7 @@ function drawLockPrediction(ctx, state, now) {
   ctx.stroke();
   ctx.restore();
 
-  drawWireGhost(ctx, zone, strike ? 1 : 0.82);
+  drawWireGhost(ctx, zone, resolved ? 0.22 : strike ? 1 : 0.82);
 }
 
 function drawDashTrail(ctx, state) {
@@ -349,6 +395,36 @@ function drawDashTrail(ctx, state) {
   ctx.lineTo(to.x + nx, to.y + ny);
   ctx.moveTo(from.x - nx, from.y - ny);
   ctx.lineTo(to.x - nx, to.y - ny);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawEscapeMarker(ctx, state) {
+  const marker = state.visual.escapeMarker;
+  if (!marker) return;
+  const point = projectWorld(marker);
+  const duration = marker.duration > 0 ? marker.duration : 0.72;
+  const alpha = Math.max(0, Math.min(1, marker.remaining / duration));
+  const direction = marker.side === "left" ? -1 : 1;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(point.x, point.y);
+  ctx.strokeStyle = COLORS.cyan;
+  ctx.fillStyle = "rgba(56,239,240,.12)";
+  ctx.shadowColor = COLORS.cyan;
+  ctx.shadowBlur = 14;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 28, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-direction * 5, -18);
+  ctx.lineTo(direction * 14, -18);
+  ctx.lineTo(direction * 7, -25);
+  ctx.moveTo(direction * 14, -18);
+  ctx.lineTo(direction * 7, -11);
   ctx.stroke();
   ctx.restore();
 }
@@ -540,6 +616,15 @@ function drawPlayer(ctx, state, now) {
   ctx.ellipse(p.x, p.y + 3, 25, 9, 0, 0, Math.PI * 2);
   ctx.fill();
 
+  // The ground point is the exact position used by every hazard check.
+  ctx.strokeStyle = COLORS.cyan;
+  ctx.fillStyle = COLORS.cyanPale;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
   ctx.translate(p.x, p.y);
   ctx.fillStyle = "#eafafb";
   ctx.strokeStyle = COLORS.cyan;
@@ -686,18 +771,18 @@ function drawHud(ctx, state) {
 function phasePrompt(state) {
   switch (state.phase) {
     case PHASE.ENGAGE:
-      return "장갑을 직접 확인하라 — 주황 경고에는 횡대시";
+      return "주황 위험 구역 밖이면 회피 · WASD / 대시 모두 가능";
     case PHASE.EXPLORE:
-      return "탐색 베기 · 좌우로 대시해 흔적을 남겨라";
+      return "탐색 베기 · 주황 구역 밖으로 피한 측면을 AI가 기억한다";
     case PHASE.EXPLORE_RECOVER:
       return "AI가 다음 표본을 찾는다";
     case PHASE.COMBINE:
       return "세 기억이 하나의 미래로 결합된다";
     case PHASE.LOCK:
     case PHASE.RELOCK:
-      return "LOCK · 자홍 예측은 고정됐다";
+      return "LOCK · 자홍 위험 구역은 고정됐다 · 밖으로 피하라";
     case PHASE.PREDICTION:
-      return "자홍 예측이 고정됐다 · 선택하라";
+      return "자홍 구역 밖이면 무피격 · 반대편이면 OUTSMART";
     case PHASE.CORE_OPEN:
       return state.phaseTime <= 0.6
         ? "장갑 복귀 · 지금 이탈!"
@@ -833,7 +918,7 @@ function drawGameOver(ctx, state, best = null) {
   if (readDeath) {
     ctx.fillStyle = COLORS.muted;
     ctx.font = "650 13px system-ui, sans-serif";
-    ctx.fillText("AI가 기억한 세 번의 횡대시", VIEW.centerX, 264);
+    ctx.fillText("AI가 기억한 세 번의 회피 방향", VIEW.centerX, 264);
     drawDeathMemory(ctx, state, VIEW.centerX - 76, 279);
     ctx.font = "700 14px system-ui, sans-serif";
     ctx.fillStyle = COLORS.text;
@@ -870,7 +955,7 @@ function drawGameOver(ctx, state, best = null) {
   ctx.fillText("다음 판에 바꿀 한 가지", VIEW.centerX, 396);
   ctx.fillStyle = COLORS.platinum;
   ctx.font = "800 17px system-ui, sans-serif";
-  ctx.fillText(state.death?.tip || "경고 구역을 보고 대시", VIEW.centerX, 421);
+  ctx.fillText(state.death?.tip || "경고 구역 밖으로 이동", VIEW.centerX, 421);
 
   ctx.fillStyle = COLORS.text;
   ctx.font = "750 13px ui-monospace, monospace";
@@ -937,6 +1022,7 @@ export function renderGame(ctx, state, { now = 0, best = null, eventToast = null
   drawArmorShockWarning(ctx, state, now);
   drawLockPrediction(ctx, state, now);
   drawDashTrail(ctx, state);
+  drawEscapeMarker(ctx, state);
   drawBoss(ctx, state, now);
   drawPlayer(ctx, state, now);
   drawImpact(ctx, state, now);
@@ -963,8 +1049,20 @@ export function createRenderer(canvas) {
       remember: (event) => ({
         priority: 20,
         text: `REMEMBER ${event.memory?.length || 0}/3`,
-        subtext: `${SIDE_LABEL[event.side] || "횡"}대시가 보스의 기억 조각으로 접혔다`,
+        subtext: `${SIDE_LABEL[event.side] || "측면"} 회피가 보스의 기억 조각으로 접혔다`,
         tone: "memory",
+      }),
+      prediction_neutral: () => ({
+        priority: 65,
+        text: "EVADE",
+        subtext: "위험 구역 밖 · 무피격 · AI가 다시 관찰한다",
+        tone: "success",
+      }),
+      evade_unlearned: () => ({
+        priority: 65,
+        text: "EVADE",
+        subtext: "가장자리 강제 회피 · AI는 기억하지 않음",
+        tone: "success",
       }),
       armor_hit: () => ({
         priority: 35,

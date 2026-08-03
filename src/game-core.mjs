@@ -106,6 +106,9 @@ function cloneState(state) {
         : null,
       attack: state.visual.attack ? { ...state.visual.attack } : null,
       impact: state.visual.impact ? { ...state.visual.impact } : null,
+      escapeMarker: state.visual.escapeMarker
+        ? { ...state.visual.escapeMarker }
+        : null,
       banner: state.visual.banner ? { ...state.visual.banner } : null,
     },
     events: [],
@@ -140,12 +143,19 @@ export function classifyLateralDash(dx, dy) {
   return dx < 0 ? SIDE.LEFT : SIDE.RIGHT;
 }
 
+export function classifyEscapeSide(offsetX, deadZone = 0) {
+  if (!Number.isFinite(offsetX) || Math.abs(offsetX) <= Math.max(0, deadZone)) {
+    return null;
+  }
+  return offsetX < 0 ? SIDE.LEFT : SIDE.RIGHT;
+}
+
 export function resolvePrediction(predictedSide, actualSide, insideLockedZone) {
-  if (!actualSide) return "execution_hit";
-  if (actualSide === oppositeSide(predictedSide) && !insideLockedZone) {
+  if (!insideLockedZone && actualSide === oppositeSide(predictedSide)) {
     return "outsmart";
   }
-  if (actualSide === predictedSide && insideLockedZone) return "read";
+  if (!insideLockedZone) return "neutral";
+  if (actualSide === predictedSide) return "read";
   if (insideLockedZone) return "execution_hit";
   return "neutral";
 }
@@ -203,6 +213,7 @@ export function createGameState({ started = false } = {}) {
       lastDash: null,
       attack: null,
       impact: null,
+      escapeMarker: null,
       banner: null,
       shake: 0,
     },
@@ -270,6 +281,19 @@ function movePlayer(state, dx, dy) {
   state.player.y = clamped.y;
 }
 
+function hasFairExploreSides(point) {
+  const xLimit = CONFIG.arenaRadiusX - CONFIG.playerRadius;
+  const yLimit = CONFIG.arenaRadiusY - CONFIG.playerRadius;
+  const normalizedY = clamp(point.y / yLimit, -1, 1);
+  const horizontalLimit =
+    xLimit * Math.sqrt(Math.max(0, 1 - normalizedY * normalizedY));
+  const requiredSpace = CONFIG.exploreLaneHalfWidth + CONFIG.playerRadius;
+  return (
+    point.x + horizontalLimit >= requiredSpace &&
+    horizontalLimit - point.x >= requiredSpace
+  );
+}
+
 function beginExplore(state) {
   state.phase = PHASE.EXPLORE;
   state.phaseTime = timingForRound(state.round).explore;
@@ -279,8 +303,7 @@ function beginExplore(state) {
   state.prematureSide = null;
   state.explore = {
     lineX: state.player.x,
-    pendingSide: null,
-    pendingLandingX: null,
+    sampleEligible: hasFairExploreSides(state.player),
   };
   emit(state, "explore_warning");
 }
@@ -344,9 +367,33 @@ function beginPrediction(state) {
   emit(state, "prediction_strike", { side: state.predictedSide });
 }
 
-function rememberSafeDash(state, side) {
+function rememberSafeEscape(state, side) {
+  state.visual.escapeMarker = {
+    x: state.player.x,
+    y: state.player.y,
+    side,
+    duration: 0.72,
+    remaining: 0.72,
+  };
   state.memory = [...state.memory, side].slice(-3);
   emit(state, "remember", { side, memory: [...state.memory] });
+}
+
+function markForcedEscape(state, side) {
+  state.visual.escapeMarker = {
+    x: state.player.x,
+    y: state.player.y,
+    side,
+    duration: 0.72,
+    remaining: 0.72,
+  };
+  setBanner(
+    state,
+    "EVADE",
+    "success",
+    "가장자리의 강제 회피는 AI가 학습하지 않는다",
+  );
+  emit(state, "evade_unlearned", { side, reason: "edge" });
 }
 
 function insideLockZone(state) {
@@ -357,13 +404,13 @@ function insideLockZone(state) {
 }
 
 function tipForDeath(kind, attackName) {
-  if (kind === "read") return "다음에는 LOCK 뒤 예측 반대 측면으로 대시";
-  if (kind === "greed") return "다음에는 두 번 베고 대시로 이탈";
-  if (attackName === "판독 공격") return "다음에는 LOCK 뒤 어느 한 측면으로 대시";
+  if (kind === "read") return "다음에는 LOCK 뒤 예측 반대편 위험 구역 밖으로 이동";
+  if (kind === "greed") return "다음에는 두 번 베고 주황 복귀 충격 밖으로 이탈";
+  if (attackName === "판독 공격") return "다음에는 자홍 위험 구역 밖으로 이동";
   if (attackName === "장갑 복귀 충격") {
-    return "다음에는 코어가 닫히기 전에 대시로 거리 확보";
+    return "다음에는 코어가 닫히기 전에 주황 복귀 충격 밖으로 이동";
   }
-  return "다음에는 주황 경고가 켜지면 어느 한 측면으로 대시";
+  return "다음에는 주황 위험 구역 밖으로 이동";
 }
 
 function enterGameOver(state, kind, attackName, actualSide = null) {
@@ -387,10 +434,10 @@ function enterGameOver(state, kind, attackName, actualSide = null) {
 
 function damagePlayer(
   state,
-  { kind, attackName, actualSide = null, ignoreInvulnerability = false },
+  { kind, attackName, actualSide = null },
 ) {
   if (
-    (!ignoreInvulnerability && state.timers.invulnerable > 0) ||
+    state.timers.invulnerable > 0 ||
     state.phase === PHASE.GAME_OVER
   ) {
     return false;
@@ -414,20 +461,22 @@ function damagePlayer(
 
 function resolveExplore(state) {
   const lineX = state.explore?.lineX ?? state.player.x;
-  const pendingSide = state.explore?.pendingSide ?? null;
-  const hit =
-    !pendingSide ||
-    Math.abs(state.player.x - lineX) <= CONFIG.exploreLaneHalfWidth;
+  const escapeSide = classifyEscapeSide(
+    state.player.x - lineX,
+    CONFIG.exploreLaneHalfWidth,
+  );
+  const hit = !escapeSide;
 
   if (hit) {
     damagePlayer(state, {
       kind: "general",
       attackName: "탐색 베기",
-      ignoreInvulnerability: true,
     });
     if (state.phase === PHASE.GAME_OVER) return;
-  } else if (pendingSide) {
-    rememberSafeDash(state, pendingSide);
+  } else if (state.explore?.sampleEligible !== false) {
+    rememberSafeEscape(state, escapeSide);
+  } else {
+    markForcedEscape(state, escapeSide);
   }
 
   if (state.memory.length >= 3) beginCombine(state);
@@ -438,7 +487,7 @@ function openCoreFromOutsmart(state, actualSide) {
   state.phase = PHASE.CORE_OPEN;
   state.phaseTime = timingForRound(state.round).coreOpen;
   state.boss.coreOpen = true;
-  state.memory = [actualSide];
+  state.memory = actualSide ? [actualSide] : [];
   state.pendingOutsmart = true;
   state.coreHitsThisWindow = 0;
   state.prematureSide = null;
@@ -452,7 +501,12 @@ function openCoreFromOutsmart(state, actualSide) {
 }
 
 function resolveLockedAttack(state) {
-  const actualSide = state.decision?.side ?? null;
+  const actualSide = state.lock
+    ? classifyEscapeSide(
+        state.player.x - state.lock.origin.x,
+        CONFIG.playerRadius,
+      )
+    : null;
   const outcome = resolvePrediction(
     state.predictedSide,
     actualSide,
@@ -476,30 +530,35 @@ function resolveLockedAttack(state) {
       kind: "read",
       attackName: "판독 공격",
       actualSide,
-      ignoreInvulnerability: true,
     });
     if (state.phase !== PHASE.GAME_OVER) beginLock(state, { relock: true });
     return;
   }
 
   if (outcome === "execution_hit") {
-    const rememberedFailureSide = actualSide || state.prematureSide;
     damagePlayer(state, {
       kind: "general",
       attackName: "판독 공격",
-      actualSide: rememberedFailureSide,
-      ignoreInvulnerability: true,
+      actualSide,
     });
     if (state.phase === PHASE.GAME_OVER) return;
-    state.memory = rememberedFailureSide ? [rememberedFailureSide] : [];
+    state.memory = actualSide ? [actualSide] : [];
     state.prematureSide = null;
     beginExploreRecover(state);
     return;
   }
 
-  setBanner(state, "예측 유지", "neutral", "공격 구역을 벗어났다");
-  emit(state, "prediction_neutral", { side: state.predictedSide });
-  beginLock(state, { relock: true });
+  setBanner(state, "EVADE", "success", "위험 구역을 벗어났다 · AI가 다시 관찰한다");
+  emit(state, "prediction_neutral", {
+    side: state.predictedSide,
+    actualSide,
+  });
+  state.memory = actualSide ? [actualSide] : [];
+  state.predictedSide = null;
+  state.lock = null;
+  state.decision = null;
+  state.prematureSide = null;
+  beginExploreRecover(state);
 }
 
 function finishRound(state) {
@@ -592,7 +651,6 @@ function performDash(state, moveX, moveY) {
     : 0.48;
 
   state.timers.dashCooldown = CONFIG.dashCooldown;
-  state.timers.invulnerable = Math.max(state.timers.invulnerable, 0.17);
   state.visual.lastDash = {
     from,
     to,
@@ -601,24 +659,6 @@ function performDash(state, moveX, moveY) {
     remaining: trailDuration,
   };
   emit(state, "dash", { side, from, to });
-
-  if (state.phase === PHASE.EXPLORE && state.explore && !state.explore.pendingSide) {
-    const landingSide =
-      Math.abs(to.x - state.explore.lineX) >= 18
-        ? to.x < state.explore.lineX
-          ? SIDE.LEFT
-          : SIDE.RIGHT
-        : null;
-    if (side && landingSide === side) {
-      state.explore.pendingSide = side;
-      state.explore.pendingLandingX = to.x;
-    }
-  }
-
-  if (state.phase === PHASE.COMBINE && side && !state.prematureSide) {
-    state.prematureSide = side;
-    emit(state, "premature_dash", { side });
-  }
 
   if (
     (state.phase === PHASE.LOCK ||
@@ -704,7 +744,7 @@ function performAttack(state) {
 }
 
 function updateVisualTimers(state, dt) {
-  for (const key of ["lastDash", "attack", "impact", "banner"]) {
+  for (const key of ["lastDash", "attack", "impact", "escapeMarker", "banner"]) {
     const value = state.visual[key];
     if (!value) continue;
     value.remaining -= dt;
@@ -755,6 +795,7 @@ function updateActivePhase(state, dt) {
 }
 
 function processSlice(state, dt, input, oneShot) {
+  const firstEventIndex = state.events.length;
   updateVisualTimers(state, dt);
   updateCooldowns(state, dt);
 
@@ -775,12 +816,25 @@ function processSlice(state, dt, input, oneShot) {
         state.player.y + move.y * speed,
       );
     }
-    if (oneShot && input.dash) performDash(state, input.moveX || 0, input.moveY || 0);
+    if (oneShot && input.dash) {
+      const capturedDashX = input.dashX ?? 0;
+      const capturedDashY = input.dashY ?? 0;
+      const hasCapturedDashDirection =
+        Math.hypot(capturedDashX, capturedDashY) > 0.0001;
+      performDash(
+        state,
+        hasCapturedDashDirection ? capturedDashX : input.moveX ?? 0,
+        hasCapturedDashDirection ? capturedDashY : input.moveY ?? 0,
+      );
+    }
     if (oneShot && input.attack) performAttack(state);
     state.elapsed += dt;
   }
 
   updateActivePhase(state, dt);
+  return state.events
+    .slice(firstEventIndex)
+    .some((event) => event.type === "player_hit");
 }
 
 export function updateGame(state, dt, input = {}) {
@@ -802,9 +856,10 @@ export function updateGame(state, dt, input = {}) {
   }
   while (remaining > 0.000001) {
     const slice = Math.min(remaining, 1 / 60);
-    processSlice(next, slice, input, firstSlice);
+    const interruptedByHit = processSlice(next, slice, input, firstSlice);
     firstSlice = false;
     remaining -= slice;
+    if (interruptedByHit) break;
   }
   return next;
 }

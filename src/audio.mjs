@@ -7,6 +7,8 @@ const TONES = Object.freeze({
   lock: [125, 0.2, "square", 0.035],
   outsmart: [740, 0.22, "triangle", 0.04],
   outsmart_confirmed: [920, 0.13, "sine", 0.035],
+  prediction_neutral: [410, 0.11, "sine", 0.025],
+  evade_unlearned: [410, 0.11, "sine", 0.025],
   read: [92, 0.24, "sawtooth", 0.05],
   armor_hit: [145, 0.07, "square", 0.025],
   core_hit: [860, 0.08, "triangle", 0.055],

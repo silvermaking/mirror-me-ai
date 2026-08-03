@@ -89,9 +89,9 @@ function eventAnnouncement(event) {
   switch (event.type) {
     case "start":
     case "restart":
-      return "전투 시작. 주황 탐색 공격에 좌우로 대시하세요.";
+      return "전투 시작. WASD나 대시로 주황 위험 구역 밖으로 피하세요.";
     case "remember":
-      return `AI 기억 ${event.memory?.length || 0}/3. ${sideLabel(event.side)} 대시.`;
+      return `AI 기억 ${event.memory?.length || 0}/3. ${sideLabel(event.side)} 회피.`;
     case "combine":
       return `AI가 ${sideLabel(event.side)} 습관을 결합했습니다.`;
     case "lock":
@@ -102,6 +102,10 @@ function eventAnnouncement(event) {
       return `속임 확정. 총 ${event.count}회.`;
     case "read":
       return `READ. ${sideLabel(event.side)} 습관을 읽혔습니다.`;
+    case "prediction_neutral":
+      return "EVADE. 위험 구역 밖으로 피했지만 AI의 측면 예측은 완전히 속이지 못했습니다.";
+    case "evade_unlearned":
+      return "EVADE. 가장자리에서 강제된 회피라 AI는 이 방향을 기억하지 않습니다.";
     case "armor_hit":
       return "닫힌 장갑. 보스 체력은 줄지 않았습니다.";
     case "core_hit":
@@ -133,6 +137,8 @@ function eventAnnouncementPriority(type) {
       return 70;
     case "lock":
     case "remember":
+    case "prediction_neutral":
+    case "evade_unlearned":
       return 40;
     default:
       return 20;
@@ -358,9 +364,10 @@ function frame(timestamp) {
   const dt = Math.min(0.1, Math.max(0, (timestamp - lastFrame) / 1000));
   lastFrame = timestamp;
   const movement = readMovement();
-  const frameMovement = oneShot.dash && dashIntent ? dashIntent : movement;
   const input = {
-    ...frameMovement,
+    ...movement,
+    dashX: oneShot.dash && dashIntent ? dashIntent.moveX : movement.moveX,
+    dashY: oneShot.dash && dashIntent ? dashIntent.moveY : movement.moveY,
     attack: oneShot.attack,
     dash: oneShot.dash,
     restart: oneShot.restart,

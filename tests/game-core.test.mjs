@@ -6,6 +6,7 @@ import {
   PHASE,
   SIDE,
   canRestart,
+  classifyEscapeSide,
   classifyLateralDash,
   createGameState,
   majoritySide,
@@ -34,6 +35,8 @@ function predictionState({
 } = {}) {
   const state = createGameState({ started: true });
   const zone = { x: 100, y: 80 };
+  const outsideX =
+    actual === SIDE.LEFT ? -100 : actual === SIDE.RIGHT ? 220 : 0;
   return {
     ...state,
     phase: PHASE.PREDICTION,
@@ -42,7 +45,7 @@ function predictionState({
     predictedSide: predicted,
     player: {
       ...state.player,
-      x: inside ? zone.x : -100,
+      x: inside ? zone.x : outsideX,
       y: inside ? zone.y : 80,
       shield,
     },
@@ -63,7 +66,7 @@ function opposite(side) {
   return side === SIDE.LEFT ? SIDE.RIGHT : SIDE.LEFT;
 }
 
-test("2/3의 최근 탐색 대시만 다음 착지 측면을 결정한다", () => {
+test("최근 세 회피 방향의 2/3가 다음 예측 측면을 결정한다", () => {
   assert.equal(majoritySide([SIDE.RIGHT, SIDE.LEFT]), null);
   assert.equal(
     majoritySide([SIDE.RIGHT, SIDE.LEFT, SIDE.RIGHT]),
@@ -97,69 +100,77 @@ test("새 시작과 재시작은 중복 없이 각각 하나의 시작 이벤트
   assert.equal(new Set(restarted.events.map((event) => event.id)).size, 1);
 });
 
-test("횡대시만 좌우 표본으로 분류한다", () => {
+test("대시 흔적의 좌우 표시는 횡방향 입력만 분류한다", () => {
   assert.equal(classifyLateralDash(80, 10), SIDE.RIGHT);
   assert.equal(classifyLateralDash(-80, 10), SIDE.LEFT);
   assert.equal(classifyLateralDash(5, -80), null);
 });
 
-test("탐색 공격 하나에는 첫 유효 횡대시 하나만 저장된다", () => {
+test("회피 측면은 입력 종류가 아니라 공격 종료 위치로 분류한다", () => {
+  assert.equal(classifyEscapeSide(39, 38), SIDE.RIGHT);
+  assert.equal(classifyEscapeSide(-39, 38), SIDE.LEFT);
+  assert.equal(classifyEscapeSide(38, 38), null);
+  assert.equal(classifyEscapeSide(Number.NaN, 38), null);
+});
+
+test("탐색 베기는 WASD로 구역 밖에 나가도 안전하고 최종 측면을 기억한다", () => {
   const base = createGameState({ started: true });
   let state = {
+    ...base,
+    phase: PHASE.EXPLORE,
+    phaseTime: 0.2,
+    player: { ...base.player, x: 0, y: 100 },
+    explore: { lineX: 0, pendingSide: null, pendingLandingX: null },
+  };
+
+  state = advance(state, 0.22, { moveX: 1 });
+  assert.equal(state.player.shield, 3);
+  assert.deepEqual(state.memory, [SIDE.RIGHT]);
+});
+
+test("탐색 베기는 같은 종료 위치라면 대시와 대각선 대시도 동일하게 판정한다", () => {
+  const base = createGameState({ started: true });
+  const makeExplore = () => ({
+    ...base,
+    phase: PHASE.EXPLORE,
+    phaseTime: 0.08,
+    player: { ...base.player, x: 0, y: 100 },
+    explore: { lineX: 0, pendingSide: null, pendingLandingX: null },
+  });
+
+  let lateral = updateGame(makeExplore(), 0.01, {
+    moveX: 1,
+    dashX: 1,
+    dashY: 0,
+    dash: true,
+  });
+  lateral = advance(lateral, 0.1);
+  assert.equal(lateral.player.shield, 3);
+  assert.deepEqual(lateral.memory, [SIDE.RIGHT]);
+
+  let diagonal = updateGame(makeExplore(), 0.01, {
+    moveX: 0,
+    moveY: 0,
+    dashX: 0.5,
+    dashY: -1,
+    dash: true,
+  });
+  assert.equal(classifyLateralDash(0.5, -1), null);
+  diagonal = advance(diagonal, 0.1);
+  assert.equal(diagonal.player.shield, 3);
+  assert.deepEqual(diagonal.memory, [SIDE.RIGHT]);
+});
+
+test("탐색 베기 종료점이 주황 구역 안이면 걷기나 수직 대시 모두 피격된다", () => {
+  const base = createGameState({ started: true });
+  let walking = {
     ...base,
     phase: PHASE.EXPLORE,
     phaseTime: 0.08,
     player: { ...base.player, x: 0, y: 100 },
     explore: { lineX: 0, pendingSide: null, pendingLandingX: null },
   };
-
-  state = updateGame(state, 0.01, { moveX: 1, moveY: 0, dash: true });
-  assert.equal(state.explore.pendingSide, SIDE.RIGHT);
-
-  state = {
-    ...state,
-    timers: { ...state.timers, dashCooldown: 0 },
-  };
-  state = updateGame(state, 0.01, { moveX: 1, moveY: 0, dash: true });
-  assert.equal(state.explore.pendingSide, SIDE.RIGHT);
-
-  state = advance(state, 0.1);
-  assert.deepEqual(state.memory, [SIDE.RIGHT]);
-});
-
-test("LOCK 결과 판정은 공개된 고정 구역과 실제 대시만 사용한다", () => {
-  assert.equal(
-    resolvePrediction(SIDE.RIGHT, SIDE.LEFT, false),
-    "outsmart",
-  );
-  assert.equal(resolvePrediction(SIDE.RIGHT, SIDE.RIGHT, true), "read");
-  assert.equal(resolvePrediction(SIDE.RIGHT, SIDE.RIGHT, false), "neutral");
-  assert.equal(resolvePrediction(SIDE.RIGHT, null, true), "execution_hit");
-  assert.equal(resolvePrediction(SIDE.RIGHT, null, false), "execution_hit");
-});
-
-test("판독 동안 대시하지 않으면 구역 밖에 서 있어도 실행 실패로 피격된다", () => {
-  let state = predictionState({
-    predicted: SIDE.RIGHT,
-    actual: null,
-    inside: false,
-  });
-  state = advance(state, 0.03);
-  assert.equal(state.player.shield, 2);
-  assert.notEqual(state.phase, PHASE.RELOCK);
-  assert.equal(state.stats.outsmarts, 0);
-});
-
-test("탐색 베기는 걷기나 수직 대시만으로 피할 수 없고 기억도 만들지 않는다", () => {
-  const base = createGameState({ started: true });
-  let walking = {
-    ...base,
-    phase: PHASE.EXPLORE,
-    phaseTime: 0.08,
-    player: { ...base.player, x: 100, y: 100 },
-    explore: { lineX: 0, pendingSide: null, pendingLandingX: null },
-  };
-  walking = advance(walking, 0.1, { moveX: 1 });
+  walking = advance(walking, 0.1, { moveX: 0.1 });
   assert.equal(walking.player.shield, 2);
   assert.deepEqual(walking.memory, []);
 
@@ -170,11 +181,119 @@ test("탐색 베기는 걷기나 수직 대시만으로 피할 수 없고 기억
     player: { ...base.player, x: 0, y: 100 },
     explore: { lineX: 0, pendingSide: null, pendingLandingX: null },
   };
-  vertical = updateGame(vertical, 0.01, { moveY: -1, dash: true });
-  assert.equal(vertical.explore.pendingSide, null);
+  vertical = updateGame(vertical, 0.01, {
+    dashX: 0,
+    dashY: -1,
+    dash: true,
+  });
   vertical = advance(vertical, 0.1);
   assert.equal(vertical.player.shield, 2);
   assert.deepEqual(vertical.memory, []);
+});
+
+test("LOCK 결과는 고정 구역과 공격 종료 위치만 사용한다", () => {
+  assert.equal(
+    resolvePrediction(SIDE.RIGHT, SIDE.LEFT, false),
+    "outsmart",
+  );
+  assert.equal(resolvePrediction(SIDE.RIGHT, SIDE.RIGHT, true), "read");
+  assert.equal(resolvePrediction(SIDE.RIGHT, SIDE.RIGHT, false), "neutral");
+  assert.equal(resolvePrediction(SIDE.RIGHT, null, true), "execution_hit");
+  assert.equal(resolvePrediction(SIDE.RIGHT, null, false), "neutral");
+});
+
+test("판독 동안 대시하지 않아도 고정 구역 밖이면 EVADE로 무피격이다", () => {
+  let state = predictionState({
+    predicted: SIDE.RIGHT,
+    actual: null,
+    inside: false,
+  });
+  state = advance(state, 0.03);
+  assert.equal(state.player.shield, 3);
+  assert.equal(state.phase, PHASE.EXPLORE_RECOVER);
+  assert.equal(state.stats.outsmarts, 0);
+  assert.ok(state.events.some((event) => event.type === "prediction_neutral"));
+});
+
+test("LOCK 반대편으로 WASD 이동해 구역을 벗어나면 OUTSMART가 된다", () => {
+  const base = createGameState({ started: true });
+  let state = {
+    ...base,
+    phase: PHASE.PREDICTION,
+    phaseTime: 0.3,
+    predictedSide: SIDE.RIGHT,
+    memory: [SIDE.RIGHT, SIDE.RIGHT, SIDE.RIGHT],
+    player: { ...base.player, x: 0, y: 80 },
+    lock: {
+      side: SIDE.RIGHT,
+      origin: { x: 0, y: 80 },
+      zone: { x: CONFIG.dashDistance, y: 80 },
+      createdAt: 0,
+    },
+    decision: { side: null, landing: null },
+  };
+
+  state = advance(state, 0.32, { moveX: -1 });
+  assert.equal(state.player.shield, 3);
+  assert.equal(state.phase, PHASE.CORE_OPEN);
+  assert.equal(state.pendingOutsmart, true);
+  assert.deepEqual(state.memory, [SIDE.LEFT]);
+});
+
+test("예측과 같은 쪽이어도 고정 구역을 완전히 지나치면 안전한 EVADE다", () => {
+  let state = predictionState({
+    predicted: SIDE.RIGHT,
+    actual: SIDE.RIGHT,
+    inside: false,
+  });
+  state = advance(state, 0.03);
+
+  assert.equal(state.player.shield, 3);
+  assert.equal(state.phase, PHASE.EXPLORE_RECOVER);
+  assert.equal(state.stats.outsmarts, 0);
+  assert.deepEqual(state.memory, [SIDE.RIGHT]);
+});
+
+test("대시 방향과 현재 WASD 이동은 분리되고 대시는 무적을 부여하지 않는다", () => {
+  const base = createGameState({ started: true });
+  const captured = updateGame(base, 0.01, {
+    moveX: -1,
+    moveY: 0,
+    dashX: 1,
+    dashY: 0,
+    dash: true,
+  });
+
+  assert.ok(captured.player.x > 80);
+  assert.equal(captured.timers.invulnerable, 0);
+
+  const sameFrameDirection = updateGame(base, 0.01, {
+    moveX: 1,
+    moveY: 0,
+    dashX: 0,
+    dashY: 0,
+    dash: true,
+  });
+  assert.ok(sameFrameDirection.player.x > 80);
+});
+
+test("피격이 난 update의 남은 이동을 중단해 화면 위치와 판정 위치를 맞춘다", () => {
+  const base = createGameState({ started: true });
+  const state = updateGame(
+    {
+      ...base,
+      phase: PHASE.EXPLORE,
+      phaseTime: 0.01,
+      player: { ...base.player, x: 20, y: 100 },
+      explore: { lineX: 0, pendingSide: null, pendingLandingX: null },
+    },
+    0.1,
+    { moveX: 1 },
+  );
+
+  assert.equal(state.player.shield, 2);
+  assert.ok(state.player.x <= CONFIG.exploreLaneHalfWidth);
+  assert.ok(state.events.some((event) => event.type === "player_hit"));
 });
 
 test("LOCK 뒤 플레이어가 움직여도 예측 착지 구역은 바뀌지 않는다", () => {
@@ -322,7 +441,7 @@ test("LOCK 판독 대시 흔적은 결과와 함께 보이도록 최소 2.2초 �
   assert.ok(state.visual.lastDash?.remaining > 1);
 });
 
-test("COMBINE 중 조기 대시는 OUTSMART가 아니라 실행 실패 표본으로 남는다", () => {
+test("COMBINE 중 이동은 처벌하지 않고 LOCK 순간의 위치를 새 원점으로 삼는다", () => {
   const base = createGameState({ started: true });
   let state = {
     ...base,
@@ -333,14 +452,21 @@ test("COMBINE 중 조기 대시는 OUTSMART가 아니라 실행 실패 표본으
     prematureSide: null,
   };
 
-  state = updateGame(state, 0.01, { moveX: -1, dash: true });
-  assert.equal(state.prematureSide, SIDE.LEFT);
-  state = advance(state, 1.8);
+  state = updateGame(state, 0.01, {
+    moveX: 0,
+    dashX: -1,
+    dashY: 0,
+    dash: true,
+  });
+  const movedX = state.player.x;
+  assert.equal(state.prematureSide, null);
+  state = advance(state, 0.04);
 
-  assert.equal(state.player.shield, 2);
+  assert.equal(state.phase, PHASE.LOCK);
+  assert.equal(state.player.shield, 3);
   assert.equal(state.stats.outsmarts, 0);
   assert.equal(state.boss.coreOpen, false);
-  assert.deepEqual(state.memory, [SIDE.LEFT]);
+  assert.ok(Math.abs(state.lock.origin.x - movedX) < 0.001);
 });
 
 test("일반 사망 조언은 마지막 실제 공격 원인마다 다르다", () => {
@@ -349,12 +475,19 @@ test("일반 사망 조언은 마지막 실제 공격 원인마다 다르다", (
   let predictionDeath = predictionState({
     predicted: SIDE.RIGHT,
     actual: null,
-    inside: false,
+    inside: true,
     shield: 1,
   });
+  predictionDeath = {
+    ...predictionDeath,
+    lock: {
+      ...predictionDeath.lock,
+      origin: { ...predictionDeath.lock.zone },
+    },
+  };
   predictionDeath = advance(predictionDeath, 0.03);
   assert.equal(predictionDeath.death.attackName, "판독 공격");
-  assert.match(predictionDeath.death.tip, /LOCK/);
+  assert.match(predictionDeath.death.tip, /자홍 위험 구역/);
   assert.equal(predictionDeath.death.showMemoryEvidence, false);
 
   let exploreDeath = {
@@ -366,7 +499,7 @@ test("일반 사망 조언은 마지막 실제 공격 원인마다 다르다", (
   };
   exploreDeath = advance(exploreDeath, 0.03);
   assert.equal(exploreDeath.death.attackName, "탐색 베기");
-  assert.match(exploreDeath.death.tip, /주황 경고/);
+  assert.match(exploreDeath.death.tip, /주황 위험 구역/);
   assert.equal(exploreDeath.death.showMemoryEvidence, false);
 
   let armorDeath = {
@@ -379,7 +512,7 @@ test("일반 사망 조언은 마지막 실제 공격 원인마다 다르다", (
   };
   armorDeath = advance(armorDeath, 0.03);
   assert.equal(armorDeath.death.attackName, "장갑 복귀 충격");
-  assert.match(armorDeath.death.tip, /거리 확보/);
+  assert.match(armorDeath.death.tip, /복귀 충격 밖/);
 });
 
 test("닫힌 장갑 공격은 직접 맞아도 보스 코어 HP를 줄이지 않는다", () => {
@@ -457,44 +590,64 @@ test("같은 예측 측면에 세 번 읽히면 보호막 세 칸이 사라져 �
 
   assert.equal(state.phase, PHASE.GAME_OVER);
   assert.equal(state.death.kind, "read");
-  assert.match(state.death.tip, /예측 반대 측면/);
+  assert.match(state.death.tip, /예측 반대편/);
 });
 
-test("전장 가장자리의 세 번째 같은 방향 대시도 입력 의도를 유지해 READ 사망이 된다", () => {
+test("전장 가장자리의 LOCK 구역은 보이는 전장 안에 고정되고 반대편으로 피할 수 있다", () => {
   const base = createGameState({ started: true });
   const edgeX = CONFIG.arenaRadiusX - CONFIG.playerRadius;
   let state = {
     ...base,
-    phase: PHASE.PREDICTION,
-    phaseTime: 0.04,
+    phase: PHASE.COMBINE,
+    phaseTime: 0.01,
     memory: [SIDE.RIGHT, SIDE.RIGHT, SIDE.RIGHT],
     predictedSide: SIDE.RIGHT,
     player: {
       ...base.player,
-      x: edgeX - 1,
+      x: edgeX,
       y: 0,
-      shield: 1,
       lastMove: { x: 1, y: 0 },
     },
-    lock: {
-      side: SIDE.RIGHT,
-      origin: { x: edgeX - CONFIG.dashDistance, y: 0 },
-      zone: { x: edgeX, y: 0 },
-      createdAt: 0,
-    },
-    decision: { side: null, landing: null },
   };
 
-  state = updateGame(state, 0.01, { moveX: 1, moveY: 0, dash: true });
-  assert.ok(Math.abs(state.player.x - edgeX) < 0.0001);
-  assert.equal(state.decision.side, SIDE.RIGHT);
-  assert.ok(Math.abs(state.decision.landing.x - edgeX) < 0.0001);
-  assert.ok(Math.abs(state.decision.landing.y) < 0.0001);
+  state = advance(state, 0.02);
+  assert.equal(state.phase, PHASE.LOCK);
+  assert.equal(state.lock.origin.x, edgeX);
+  assert.ok(state.lock.zone.x <= edgeX);
 
-  state = advance(state, 0.05);
-  assert.equal(state.phase, PHASE.GAME_OVER);
-  assert.equal(state.death.kind, "read");
-  assert.equal(state.death.actualSide, SIDE.RIGHT);
+  state = advance(state, 1.8, { moveX: -1, moveY: 0 });
+  assert.equal(state.player.shield, 3);
+  assert.equal(state.phase, PHASE.CORE_OPEN);
+  assert.equal(state.pendingOutsmart, true);
+  assert.equal(state.stats.outsmarts, 0);
+});
+
+test("가장자리에서 한쪽으로 강제된 탐색 회피는 안전하지만 AI 표본이 되지 않는다", () => {
+  const base = createGameState({ started: true });
+  const edgeX = CONFIG.arenaRadiusX - CONFIG.playerRadius;
+  const state = advance(
+    {
+      ...base,
+      phase: PHASE.EXPLORE,
+      phaseTime: 0.01,
+      player: {
+        ...base.player,
+        x: edgeX - CONFIG.exploreLaneHalfWidth - 20,
+        y: 0,
+      },
+      explore: {
+        lineX: edgeX,
+        sampleEligible: false,
+      },
+    },
+    0.02,
+  );
+
+  assert.equal(state.player.shield, 3);
+  assert.deepEqual(state.memory, []);
+  assert.equal(state.phase, PHASE.EXPLORE_RECOVER);
+  assert.ok(state.events.some((event) => event.type === "evade_unlearned"));
+  assert.equal(state.visual.escapeMarker.side, SIDE.LEFT);
 });
 
 test("첫 10초 안에 세 기억, LOCK, 반대 대시, 실제 접근과 세 코어 타격이 가능하다", () => {
@@ -507,17 +660,20 @@ test("첫 10초 안에 세 기억, LOCK, 반대 대시, 실제 접근과 세 코
     const input = {};
     if (
       state.phase === PHASE.EXPLORE &&
-      !state.explore?.pendingSide &&
+      Math.abs(state.player.x - state.explore.lineX) <=
+        CONFIG.exploreLaneHalfWidth &&
       state.timers.dashCooldown === 0
     ) {
-      input.moveX = 1;
+      input.dashX = 1;
+      input.dashY = 0;
       input.dash = true;
     } else if (
       (state.phase === PHASE.LOCK || state.phase === PHASE.PREDICTION) &&
-      !state.decision?.side &&
+      Math.abs(state.player.x - state.lock.origin.x) <= CONFIG.playerRadius &&
       state.timers.dashCooldown === 0
     ) {
-      input.moveX = -1;
+      input.dashX = -1;
+      input.dashY = 0;
       input.dash = true;
     } else if (state.phase === PHASE.CORE_OPEN) {
       input.moveX = state.boss.x - state.player.x;
