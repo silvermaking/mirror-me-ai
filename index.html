@@ -10,6 +10,14 @@
     />
     <title>Mirror Me AI</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three-0.180.0/build/three.module.js",
+          "three/addons/": "./vendor/three-0.180.0/examples/jsm/"
+        }
+      }
+    </script>
   </head>
   <body>
     <main class="app-shell">
@@ -25,35 +33,24 @@
           이 브라우저는 Canvas 게임 화면을 지원하지 않습니다.
         </canvas>
 
-        <div class="canvas-vignette" aria-hidden="true"></div>
-
         <section
           id="start-overlay"
           class="start-overlay"
           aria-labelledby="game-title"
           aria-describedby="game-hook"
         >
-          <div class="start-panel">
+          <div class="start-copy">
+            <p id="loading-copy" class="loading-copy">가마 전장을 불러오는 중…</p>
             <h1 id="game-title">Mirror Me</h1>
-            <p id="game-hook" class="game-hook">
-              세 장의 도편에 남은 발놀림을 역이용하라.<br />
-              <strong>위험 구역 밖이면 회피 성공</strong><br />
-              <span class="dodge-note">WASD / 대시 모두 가능 · 대시는 무적 아님</span>
-            </p>
-
-            <p class="input-prompt" aria-label="이동, 대시, 공격. 아무 전투 입력으로 시작">
-              <span class="input-actions">
-                <span class="input-action"><span>이동</span><kbd>WASD</kbd></span>
-                <span class="input-divider" aria-hidden="true">·</span>
-                <span class="input-action"><span>대시</span><kbd>Space</kbd></span>
-                <span class="input-divider" aria-hidden="true">·</span>
-                <span class="input-action"><span>공격</span><kbd>J</kbd></span>
-              </span>
-              <strong class="input-start">아무 전투 입력으로 시작</strong>
-            </p>
-
-            <button id="start-button" class="start-button" type="button">전투 시작</button>
+            <p id="game-hook" class="game-hook">세 장의 도편에 남은 발놀림을 역이용하라.</p>
+            <p class="input-prompt">WASD 이동 · SPACE 대시(무적 아님) · J 공격</p>
+            <button id="start-button" class="start-button" type="button">아무 전투 입력으로 시작</button>
           </div>
+        </section>
+
+        <section id="game-over-overlay" class="game-over-overlay" aria-live="assertive" hidden>
+          <p id="game-over-tip">다음에는 위험 구역 밖으로 이동</p>
+          <p id="game-over-restart">분석 중…</p>
         </section>
 
         <button

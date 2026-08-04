@@ -1,0 +1,2 @@
+# Preserve exact upstream Three.js vendor bytes; upstream's intentional mixed indentation is not a project whitespace error.
+vendor/three-0.180.0/** -whitespace

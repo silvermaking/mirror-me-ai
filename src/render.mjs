@@ -1,853 +1,654 @@
-import { CONFIG, PHASE } from "./game-core.mjs";
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { ASSET_FILES, REQUIRED_NODES } from "./asset-contract.mjs";
+import { CONFIG, PHASE, timingForRound } from "./game-core.mjs";
 
-const LOGICAL_WIDTH = 1280;
-const LOGICAL_HEIGHT = 720;
-const VIEW = Object.freeze({
-  centerX: LOGICAL_WIDTH / 2,
-  centerY: 404,
-  scaleX: 1.03,
-  scaleY: 0.77,
+const ARENA_RADIUS = 7.2;
+const ARENA_SURFACE = 0.48;
+const WORLD_X = ARENA_RADIUS / CONFIG.arenaRadiusX;
+const WORLD_Z = ARENA_RADIUS / CONFIG.arenaRadiusY;
+const ASSETS = Object.freeze({
+  arena: new URL(`../${ASSET_FILES.arena}`, import.meta.url),
+  player: new URL(`../${ASSET_FILES.player}`, import.meta.url),
+  boss: new URL(`../${ASSET_FILES.boss}`, import.meta.url),
 });
+const PLAYER_SHADOW_MESHES = new Set([
+  "torso_wrapped_vest", "ivory_chest_guard", "long_coat_tail", "mask_cut_face", "short_sword_blade",
+]);
+const BOSS_SHADOW_MESHES = new Set([
+  "furnace_cast_shell", "furnace_underslung_keel", "rotary_cast_housing", "upper_arm_cast", "forearm_cast",
+  "driver_wedge_head", "brace_arm", "left_shutter_plate", "right_shutter_plate",
+]);
 
-const COLORS = Object.freeze({
-  soot: "#171313",
-  deepSoot: "#080706",
-  brick: "#513a2b",
-  brickLight: "#80614a",
-  iron: "#211e1b",
-  ironEdge: "#665447",
-  porcelain: "#b9ab91",
-  porcelainLight: "#dfd0b2",
-  brass: "#8d6b36",
-  brassLight: "#c49c50",
-  rust: "#9d422b",
-  rustBright: "#c55c32",
-  ash: "#a69b85",
-  enamel: "#52b7ae",
-  enamelLight: "#b9ece1",
-  heat: "#f3bb62",
-  fire: "#fff0c2",
-  white: "#eee7d9",
-});
+export const WORLD_MAPPING = Object.freeze({ arenaRadius: ARENA_RADIUS, surface: ARENA_SURFACE, worldX: WORLD_X, worldZ: WORLD_Z });
 
-export function projectWorld(point) {
-  return {
-    x: VIEW.centerX + point.x * VIEW.scaleX,
-    y: VIEW.centerY + point.y * VIEW.scaleY,
-  };
+export function coreToWorld(point, height = 0) {
+  return new THREE.Vector3(point.x * WORLD_X, ARENA_SURFACE + height, point.y * WORLD_Z);
 }
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function mix(a, b, amount) {
-  return a + (b - a) * amount;
+function phaseProgress(state, duration) {
+  return clamp(1 - state.phaseTime / duration, 0, 1);
 }
 
-function roundedRect(ctx, x, y, width, height, radius = 8) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + width, y, x + width, y + height, r);
-  ctx.arcTo(x + width, y + height, x, y + height, r);
-  ctx.arcTo(x, y + height, x, y, r);
-  ctx.arcTo(x, y, x + width, y, r);
-  ctx.closePath();
+function easeOutCubic(value) {
+  return 1 - (1 - value) ** 3;
 }
 
-function ellipse(ctx, point, rx, ry) {
-  ctx.beginPath();
-  ctx.ellipse(point.x, point.y, rx, ry, 0, 0, Math.PI * 2);
-}
-
-function line(ctx, from, to) {
-  ctx.beginPath();
-  ctx.moveTo(from.x, from.y);
-  ctx.lineTo(to.x, to.y);
-}
-
-function lines(ctx, segments) {
-  ctx.beginPath();
-  for (const [from, to] of segments) {
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-  }
-}
-
-function vector(from, to) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const length = Math.max(0.001, Math.hypot(dx, dy));
-  return { x: dx / length, y: dy / length, length };
-}
-
-function pointAlong(from, to, amount) {
-  return { x: mix(from.x, to.x, amount), y: mix(from.y, to.y, amount) };
-}
-
-function perpendicular(direction, amount) {
-  return { x: -direction.y * amount, y: direction.x * amount };
-}
-
-function drawFiringHall(ctx) {
-  const wall = ctx.createLinearGradient(0, 0, 0, 360);
-  wall.addColorStop(0, "#100d0c");
-  wall.addColorStop(0.68, "#272019");
-  wall.addColorStop(1, "#453426");
-  ctx.fillStyle = wall;
-  ctx.fillRect(0, 0, LOGICAL_WIDTH, 460);
-
-  ctx.save();
-  ctx.globalAlpha = 0.62;
-  for (let index = 0; index < 10; index += 1) {
-    const x = 34 + index * 137;
-    ctx.fillStyle = index % 2 ? "#201913" : "#2c2118";
-    ctx.fillRect(x, 34, 58, 312);
-    ctx.fillStyle = "rgba(206,168,99,.13)";
-    ctx.fillRect(x + 7, 38, 5, 300);
-    ctx.strokeStyle = "rgba(0,0,0,.48)";
-    ctx.lineWidth = 3;
-    for (let y = 72; y < 325; y += 42) {
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + 58, y);
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
-
-  const haze = ctx.createLinearGradient(0, 160, 0, 390);
-  haze.addColorStop(0, "rgba(227,190,121,.08)");
-  haze.addColorStop(1, "rgba(15,11,9,0)");
-  ctx.fillStyle = haze;
-  ctx.fillRect(0, 120, LOGICAL_WIDTH, 300);
-}
-
-function drawArena(ctx, now) {
-  drawFiringHall(ctx);
-  const rx = CONFIG.arenaRadiusX * VIEW.scaleX;
-  const ry = CONFIG.arenaRadiusY * VIEW.scaleY;
-  const center = { x: VIEW.centerX, y: VIEW.centerY };
-
-  ctx.save();
-  ellipse(ctx, center, rx + 17, ry + 16);
-  ctx.fillStyle = "#17120f";
-  ctx.fill();
-  ctx.strokeStyle = "#6d5845";
-  ctx.lineWidth = 5;
-  ctx.stroke();
-
-  ellipse(ctx, center, rx, ry);
-  ctx.clip();
-  const floor = ctx.createRadialGradient(center.x, center.y - 38, 24, center.x, center.y, rx);
-  floor.addColorStop(0, "#705541");
-  floor.addColorStop(0.56, "#4d382b");
-  floor.addColorStop(1, "#261d18");
-  ctx.fillStyle = floor;
-  ctx.fillRect(center.x - rx, center.y - ry, rx * 2, ry * 2);
-
-  ctx.strokeStyle = "rgba(224,196,152,.18)";
-  ctx.lineWidth = 1.2;
-  for (let ring = 0.19; ring <= 0.95; ring += 0.19) {
-    ellipse(ctx, center, rx * ring, ry * ring);
-    ctx.stroke();
-  }
-  for (let row = -5; row <= 5; row += 1) {
-    const y = center.y + row * 32;
-    const offset = row % 2 ? 28 : 0;
-    ctx.strokeStyle = "rgba(28,19,15,.46)";
-    ctx.beginPath();
-    ctx.moveTo(center.x - rx, y);
-    ctx.lineTo(center.x + rx, y);
-    ctx.stroke();
-    for (let x = center.x - rx + offset; x < center.x + rx; x += 74) {
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, y + 32);
-      ctx.stroke();
-    }
-  }
-
-  ctx.strokeStyle = "rgba(12,10,9,.9)";
-  ctx.lineWidth = 11;
-  ellipse(ctx, center, rx * 0.89, ry * 0.89);
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(164,128,80,.45)";
-  ctx.lineWidth = 2;
-  ellipse(ctx, center, rx * 0.89, ry * 0.89);
-  ctx.stroke();
-
-  const dust = 0.06 + Math.sin(now * 0.5) * 0.015;
-  ctx.fillStyle = `rgba(239,216,173,${dust})`;
-  for (let index = 0; index < 26; index += 1) {
-    const x = center.x - rx + ((index * 131) % Math.round(rx * 2));
-    const y = center.y - ry + ((index * 71) % Math.round(ry * 2));
-    ctx.fillRect(x, y, 2, 2);
-  }
-  ctx.restore();
-
-  ctx.save();
-  ellipse(ctx, center, rx + 17, ry + 16);
-  ctx.strokeStyle = "rgba(231,208,170,.2)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawExploreWarning(ctx, state) {
-  if (state.phase !== PHASE.EXPLORE || !state.explore) return;
-  const center = projectWorld({ x: state.explore.lineX, y: 0 });
-  const half = CONFIG.exploreLaneHalfWidth * VIEW.scaleX;
-  const urgency = 1 - clamp(state.phaseTime / 0.55, 0, 1);
-  const top = VIEW.centerY - 210;
-  const bottom = VIEW.centerY + 208;
-
-  ctx.save();
-  ctx.globalAlpha = 0.72 + urgency * 0.28;
-  ctx.fillStyle = "rgba(124,46,29,.16)";
-  ctx.fillRect(center.x - half, top, half * 2, bottom - top);
-  ctx.strokeStyle = COLORS.rustBright;
-  ctx.lineWidth = 3 + urgency * 2;
-  lines(ctx, [
-    [{ x: center.x - half, y: top }, { x: center.x - half, y: bottom }],
-    [{ x: center.x + half, y: top }, { x: center.x + half, y: bottom }],
-  ]);
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.porcelainLight;
-  ctx.lineWidth = 4;
-  const gap = clamp(state.phaseTime / 0.55, 0, 1) * 185;
-  lines(ctx, [
-    [{ x: center.x - half - 8, y: VIEW.centerY - gap }, { x: center.x + half + 8, y: VIEW.centerY - gap }],
-    [{ x: center.x - half - 8, y: VIEW.centerY + gap }, { x: center.x + half + 8, y: VIEW.centerY + gap }],
-  ]);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawKilnTarget(ctx, state, now) {
-  if (!state.lock) return;
-  const target = projectWorld(state.lock.zone);
-  const striking = state.phase === PHASE.PREDICTION;
-  const resolved = state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR;
-  const pulse = 0.6 + Math.sin(now * 12) * 0.15;
-  const rx = CONFIG.lockZoneRadiusX * VIEW.scaleX;
-  const ry = CONFIG.lockZoneRadiusY * VIEW.scaleY;
-
-  ctx.save();
-  ellipse(ctx, target, rx, ry);
-  ctx.fillStyle = resolved ? "rgba(64,31,23,.24)" : "rgba(137,53,33,.21)";
-  ctx.fill();
-  ctx.strokeStyle = resolved ? "rgba(55,40,31,.82)" : COLORS.rustBright;
-  ctx.lineWidth = striking ? 5 : 3;
-  ctx.stroke();
-  ctx.strokeStyle = resolved ? "rgba(19,16,13,.8)" : `rgba(221,163,104,${pulse})`;
-  ctx.lineWidth = 2;
-  ellipse(ctx, target, rx * 0.66, ry * 0.66);
-  ctx.stroke();
-
-  if (!resolved) {
-    ctx.fillStyle = COLORS.rust;
-    for (let index = 0; index < 8; index += 1) {
-      const angle = (Math.PI * 2 * index) / 8;
-      const x = target.x + Math.cos(angle) * rx * 0.96;
-      const y = target.y + Math.sin(angle) * ry * 0.96;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(angle);
-      ctx.fillRect(-5, -4, 10, 8);
-      ctx.restore();
-    }
-  }
-  ctx.restore();
-}
-
-function drawDashSkid(ctx, state) {
-  const dash = state.visual.lastDash;
-  if (!dash) return;
-  const from = projectWorld(dash.from);
-  const to = projectWorld(dash.to);
-  const alpha = clamp(dash.remaining / dash.duration, 0, 1);
-  const direction = vector(from, to);
-  const normal = perpendicular(direction, 4);
-  ctx.save();
-  ctx.globalAlpha = alpha * 0.9;
-  ctx.strokeStyle = COLORS.enamel;
-  ctx.lineWidth = 4;
-  lines(ctx, [
-    [{ x: from.x + normal.x, y: from.y + normal.y }, { x: to.x + normal.x, y: to.y + normal.y }],
-    [{ x: from.x - normal.x, y: from.y - normal.y }, { x: to.x - normal.x, y: to.y - normal.y }],
-  ]);
-  ctx.stroke();
-  ctx.fillStyle = COLORS.enamelLight;
-  ellipse(ctx, to, 5, 2.5);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawMemorySlab(ctx, x, y, side, active) {
-  const cutLeft = side === "left";
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.beginPath();
-  if (cutLeft) {
-    ctx.moveTo(-16, -16);
-    ctx.lineTo(3, -16);
-    ctx.lineTo(16, -4);
-    ctx.lineTo(12, 18);
-    ctx.lineTo(-16, 18);
-    ctx.lineTo(-16, 1);
-    ctx.lineTo(-8, -7);
-    ctx.closePath();
-  } else {
-    ctx.moveTo(-3, -16);
-    ctx.lineTo(16, -16);
-    ctx.lineTo(16, 1);
-    ctx.lineTo(8, 9);
-    ctx.lineTo(16, 18);
-    ctx.lineTo(-12, 18);
-    ctx.lineTo(-16, -4);
-    ctx.closePath();
-  }
-  ctx.fillStyle = active ? COLORS.porcelainLight : COLORS.porcelain;
-  ctx.fill();
-  ctx.strokeStyle = active ? COLORS.brassLight : COLORS.ironEdge;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(48,31,22,.74)";
-  ctx.lineWidth = 1.5;
-  line(ctx, { x: -8, y: 4 }, { x: 8, y: 4 });
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawMemoryRack(ctx, state, base, now) {
-  ctx.save();
-  ctx.strokeStyle = COLORS.iron;
-  ctx.lineWidth = 8;
-  line(ctx, { x: base.x - 54, y: base.y - 133 }, { x: base.x + 54, y: base.y - 133 });
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.brass;
-  ctx.lineWidth = 2;
-  line(ctx, { x: base.x - 54, y: base.y - 139 }, { x: base.x + 54, y: base.y - 139 });
-  ctx.stroke();
-
-  // The state machine immediately keeps only the real opposite escape after an
-  // OUTSMART. The still-locked three slabs remain on the boss for this one
-  // physical aftermath, so the empty impact visibly follows from its belief.
-  const lockedAfterimage =
-    (state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR) &&
-    state.lock?.side;
-  const filled = lockedAfterimage
-    ? [state.lock.side, state.lock.side, state.lock.side]
-    : state.memory.slice(-3);
-  const combining = state.phase === PHASE.COMBINE || Boolean(state.lock);
-  for (let index = 0; index < 3; index += 1) {
-    const side = filled[index];
-    const x = base.x + (index - 1) * 37;
-    const wobble = combining && side ? Math.sin(now * 18 + index) * 1.5 : 0;
-    ctx.fillStyle = "#100d0b";
-    roundedRect(ctx, x - 18, base.y - 166, 36, 48, 4);
-    ctx.fill();
-    ctx.strokeStyle = COLORS.ironEdge;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    if (side) drawMemorySlab(ctx, x + wobble, base.y - 143, side, combining);
-  }
-
-  if (combining && state.predictedSide) {
-    const direction = state.predictedSide === "left" ? -1 : 1;
-    ctx.strokeStyle = COLORS.brassLight;
-    ctx.lineWidth = 4;
-    line(ctx, { x: base.x, y: base.y - 119 }, { x: base.x + direction * 62, y: base.y - 105 });
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawPileDriver(ctx, from, target, embedded, intensity) {
-  const direction = vector(from, target);
-  const normal = perpendicular(direction, 1);
-  const reach = Math.max(42, direction.length - 10);
-  const end = { x: from.x + direction.x * reach, y: from.y + direction.y * reach };
-  const railStart = { x: from.x + normal.x * 23, y: from.y + normal.y * 23 };
-  const railEnd = { x: end.x + normal.x * 23, y: end.y + normal.y * 23 };
-  const otherStart = { x: from.x - normal.x * 23, y: from.y - normal.y * 23 };
-  const otherEnd = { x: end.x - normal.x * 23, y: end.y - normal.y * 23 };
-  const collar = pointAlong(from, end, 0.24);
-
-  ctx.save();
-  ctx.lineCap = "round";
-  ctx.strokeStyle = "#181510";
-  ctx.lineWidth = 62;
-  line(ctx, from, end);
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.ironEdge;
-  ctx.lineWidth = 50;
-  line(ctx, from, end);
-  ctx.stroke();
-  ctx.strokeStyle = "#30291f";
-  ctx.lineWidth = 35;
-  line(ctx, from, end);
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.brass;
-  ctx.lineWidth = 3;
-  lines(ctx, [[railStart, railEnd], [otherStart, otherEnd]]);
-  ctx.stroke();
-
-  ctx.fillStyle = COLORS.porcelain;
-  ctx.strokeStyle = COLORS.iron;
-  ctx.lineWidth = 4;
-  ctx.save();
-  ctx.translate(collar.x, collar.y);
-  ctx.rotate(Math.atan2(direction.y, direction.x));
-  roundedRect(ctx, -24, -39, 48, 78, 7);
-  ctx.fill();
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(62,42,30,.62)";
-  ctx.lineWidth = 2;
-  lines(ctx, [
-    [{ x: -17, y: -20 }, { x: 17, y: -20 }],
-    [{ x: -17, y: 8 }, { x: 17, y: 8 }],
-  ]);
-  ctx.stroke();
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(end.x, end.y);
-  ctx.rotate(Math.atan2(direction.y, direction.x));
-  ctx.fillStyle = embedded ? "#100e0c" : COLORS.iron;
-  ctx.strokeStyle = embedded ? COLORS.rustBright : COLORS.ironEdge;
-  ctx.lineWidth = 5;
-  roundedRect(ctx, -22, -46, 45, 92, 6);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = embedded ? "rgba(145,61,37,.36)" : "#332a21";
-  ctx.fillRect(-13, -36, 27, 72);
-  ctx.restore();
-
-  if (embedded) {
-    ctx.strokeStyle = `rgba(225,183,118,${0.32 + intensity * 0.28})`;
-    ctx.lineWidth = 2;
-    const cracks = [];
-    for (let index = 0; index < 5; index += 1) {
-      const angle = (Math.PI * 2 * index) / 5 + 0.4;
-      const crackStart = { x: end.x + Math.cos(angle) * 22, y: end.y + Math.sin(angle) * 12 };
-      const crackEnd = { x: end.x + Math.cos(angle) * (45 + index * 4), y: end.y + Math.sin(angle) * (28 + index * 3) };
-      cracks.push([crackStart, crackEnd]);
-    }
-    lines(ctx, cracks);
-    ctx.stroke();
-  }
-  ctx.restore();
-  return { end, direction };
-}
-
-function drawBraceArm(ctx, from, ground) {
-  const elbow = pointAlong(from, ground, 0.48);
-  ctx.save();
-  ctx.strokeStyle = COLORS.iron;
-  ctx.lineWidth = 22;
-  ctx.lineCap = "round";
-  lines(ctx, [[from, elbow], [elbow, ground]]);
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.brass;
-  ctx.lineWidth = 3;
-  lines(ctx, [[from, elbow], [elbow, ground]]);
-  ctx.stroke();
-  ctx.fillStyle = COLORS.porcelain;
-  ctx.strokeStyle = COLORS.iron;
-  ctx.lineWidth = 3;
-  ellipse(ctx, elbow, 15, 12);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#17130f";
-  ctx.fillRect(ground.x - 18, ground.y - 7, 36, 14);
-  ctx.restore();
-}
-
-function drawFurnaceBody(ctx, state, base, tilt, now, pile) {
-  const coreOpen = state.boss.coreOpen;
-  ctx.save();
-  ctx.translate(base.x, base.y - 59);
-  ctx.rotate(tilt);
-
-  ctx.fillStyle = "rgba(0,0,0,.48)";
-  ellipse(ctx, { x: 0, y: 65 }, 94, 30);
-  ctx.fill();
-
-  ctx.fillStyle = COLORS.iron;
-  ctx.strokeStyle = COLORS.ironEdge;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(-90, -55);
-  ctx.lineTo(-62, -105);
-  ctx.lineTo(55, -107);
-  ctx.lineTo(92, -54);
-  ctx.lineTo(80, 42);
-  ctx.lineTo(42, 67);
-  ctx.lineTo(-72, 55);
-  ctx.lineTo(-98, 4);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = COLORS.porcelain;
-  ctx.strokeStyle = "#4b3c31";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(-78, -46);
-  ctx.lineTo(-52, -89);
-  ctx.lineTo(-20, -84);
-  ctx.lineTo(-35, 48);
-  ctx.lineTo(-68, 40);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(27, -88);
-  ctx.lineTo(57, -82);
-  ctx.lineTo(78, -43);
-  ctx.lineTo(65, 39);
-  ctx.lineTo(34, 47);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.strokeStyle = "rgba(70,49,35,.75)";
-  ctx.lineWidth = 2;
-  lines(ctx, [
-    [{ x: -61, y: -45 }, { x: -33, y: -15 }],
-    [{ x: -64, y: -4 }, { x: -34, y: 20 }],
-    [{ x: 32, y: -50 }, { x: 64, y: -18 }],
-    [{ x: 32, y: 7 }, { x: 63, y: 27 }],
-  ]);
-  ctx.stroke();
-
-  const shutterY = -12;
-  ctx.fillStyle = "#100d0b";
-  roundedRect(ctx, -40, shutterY - 31, 80, 66, 6);
-  ctx.fill();
-  ctx.strokeStyle = COLORS.brass;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
-  if (coreOpen) {
-    const glow = ctx.createRadialGradient(0, shutterY + 1, 3, 0, shutterY + 1, 48);
-    glow.addColorStop(0, "rgba(255,241,198,.96)");
-    glow.addColorStop(0.34, "rgba(242,175,82,.78)");
-    glow.addColorStop(1, "rgba(177,66,29,0)");
-    ctx.fillStyle = glow;
-    ellipse(ctx, { x: 0, y: shutterY + 1 }, 45, 42);
-    ctx.fill();
-    ctx.fillStyle = "#33170e";
-    roundedRect(ctx, -26, shutterY - 20, 52, 42, 4);
-    ctx.fill();
-    ctx.strokeStyle = COLORS.brickLight;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.fillStyle = COLORS.fire;
-    ctx.fillRect(-10, shutterY - 8, 20, 23 + Math.sin(now * 18) * 4);
-    ctx.fillStyle = COLORS.heat;
-    ctx.fillRect(-18, shutterY + 6, 36, 12);
-    ctx.fillStyle = COLORS.porcelain;
-    ctx.strokeStyle = COLORS.iron;
-    ctx.lineWidth = 3;
-    ctx.save();
-    ctx.rotate(-0.66);
-    roundedRect(ctx, -83, shutterY - 19, 34, 42, 4);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    ctx.save();
-    ctx.rotate(0.66);
-    roundedRect(ctx, 49, shutterY - 19, 34, 42, 4);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  } else {
-    ctx.fillStyle = COLORS.porcelain;
-    roundedRect(ctx, -33, shutterY - 24, 66, 52, 5);
-    ctx.fill();
-    ctx.strokeStyle = COLORS.ironEdge;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(69,49,36,.88)";
-    ctx.lineWidth = 3;
-    lines(ctx, [
-      [{ x: -26, y: shutterY - 16 }, { x: 25, y: shutterY + 18 }],
-      [{ x: 26, y: shutterY - 16 }, { x: -25, y: shutterY + 18 }],
-    ]);
-    ctx.stroke();
-  }
-
-  const linkEnd = pile?.end || { x: base.x + 120, y: base.y + 15 };
-  ctx.restore();
-
-  if (coreOpen) {
-    const chest = { x: base.x + Math.cos(tilt) * 20, y: base.y - 62 };
-    ctx.save();
-    ctx.strokeStyle = COLORS.brassLight;
-    ctx.lineWidth = 5;
-    ctx.lineCap = "round";
-    line(ctx, { x: chest.x + 35, y: chest.y + 4 }, { x: linkEnd.x - 12, y: linkEnd.y - 10 });
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(35,22,15,.9)";
-    ctx.lineWidth = 1.5;
-    line(ctx, { x: chest.x + 35, y: chest.y + 4 }, { x: linkEnd.x - 12, y: linkEnd.y - 10 });
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-function drawBoss(ctx, state, now) {
-  const base = projectWorld(state.boss);
-  // The small stabilizer reads exploration lanes. The heavy pile-driver remains
-  // visibly stowed until LOCK commits it to a fixed plate, keeping the player
-  // and the live floor warning unobscured during sampling.
-  const target = state.lock
-    ? projectWorld(state.lock.zone)
-    : projectWorld({ x: state.boss.x + 154, y: state.boss.y + 116 });
-  const locked = Boolean(state.lock);
-  const resolved = state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR;
-  const direction = target.x >= base.x ? 1 : -1;
-  // A miss is not a generic glow state: the pile-driver stays buried while its
-  // overextension drags the low furnace body sideways and pulls its shutters.
-  const tilt = resolved ? direction * 0.27 : locked ? direction * 0.035 : 0;
-  const shake = state.visual.shake ? Math.sin(now * 85) * state.visual.shake * 14 : 0;
-  const bodyBase = {
-    x: base.x + shake + (resolved ? direction * 29 : 0),
-    y: base.y + (resolved ? 27 : 0),
-  };
-  const shoulder = { x: bodyBase.x + direction * 58, y: bodyBase.y - 112 };
-  const braceStart = { x: bodyBase.x - direction * 60, y: bodyBase.y - 82 };
-  const braceGround = { x: bodyBase.x - direction * 132, y: bodyBase.y + 30 };
-
-  ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,.56)";
-  ellipse(ctx, { x: bodyBase.x, y: bodyBase.y + 29 }, 130, 39);
-  ctx.fill();
-  ctx.restore();
-
-  drawBraceArm(ctx, braceStart, braceGround);
-  const pile = drawPileDriver(ctx, shoulder, target, resolved, state.visual.shake || 0);
-  drawFurnaceBody(ctx, state, bodyBase, tilt, now, pile);
-  drawMemoryRack(ctx, state, bodyBase, now);
-
-  const sight = { x: bodyBase.x + direction * 23, y: bodyBase.y - 145 };
-  ctx.save();
-  ctx.fillStyle = "#17120f";
-  ctx.strokeStyle = COLORS.brassLight;
-  ctx.lineWidth = 3;
-  roundedRect(ctx, sight.x - 15, sight.y - 10, 30, 20, 5);
-  ctx.fill();
-  ctx.stroke();
-  if (locked) {
-    ctx.strokeStyle = COLORS.rustBright;
-    ctx.lineWidth = 2.5;
-    line(ctx, sight, target);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(224,186,117,.66)";
-    ctx.lineWidth = 1;
-    line(ctx, { x: sight.x + direction * 4, y: sight.y + 4 }, { x: target.x, y: target.y });
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawPlayer(ctx, state, now) {
-  const point = projectWorld(state.player);
-  const boss = projectWorld(state.boss);
-  const angle = Math.atan2(boss.y - point.y, boss.x - point.x);
-  const blinking = state.timers.invulnerable > 0 && Math.sin(now * 40) > 0.2;
-
-  ctx.save();
-  ctx.globalAlpha = blinking ? 0.45 : 1;
-  ctx.fillStyle = "rgba(0,0,0,.58)";
-  ellipse(ctx, { x: point.x, y: point.y + 4 }, 20, 7);
-  ctx.fill();
-  ctx.fillStyle = COLORS.enamelLight;
-  ellipse(ctx, point, 5, 3);
-  ctx.fill();
-  ctx.strokeStyle = COLORS.enamel;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  ctx.translate(point.x, point.y);
-  ctx.fillStyle = "#2b2924";
-  ctx.strokeStyle = "#13110e";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(-13, -8);
-  ctx.lineTo(-10, -39);
-  ctx.lineTo(0, -52);
-  ctx.lineTo(12, -38);
-  ctx.lineTo(14, -8);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = COLORS.porcelainLight;
-  ctx.beginPath();
-  ctx.moveTo(-6, -39);
-  ctx.lineTo(0, -49);
-  ctx.lineTo(6, -39);
-  ctx.lineTo(4, -28);
-  ctx.lineTo(-4, -28);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = COLORS.enamel;
-  ctx.fillRect(-13, -28, 8, 18);
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(point.x, point.y - 29);
-  ctx.rotate(angle);
-  ctx.strokeStyle = "#e8e0d0";
-  ctx.lineWidth = 3.5;
-  line(ctx, { x: 4, y: 0 }, { x: 43, y: 0 });
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.brassLight;
-  ctx.lineWidth = 2;
-  line(ctx, { x: 9, y: -7 }, { x: 9, y: 7 });
-  ctx.stroke();
-  ctx.restore();
-
-  if (state.visual.attack) {
-    const alpha = clamp(state.visual.attack.remaining / 0.24, 0, 1);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(point.x, point.y - 28);
-    ctx.rotate(angle);
-    ctx.strokeStyle = state.visual.attack.hit ? COLORS.fire : COLORS.white;
-    ctx.lineWidth = state.visual.attack.hit ? 5 : 3;
-    ctx.beginPath();
-    ctx.arc(13, 0, 51, -0.68, 0.68);
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-function drawImpact(ctx, state, now) {
-  const impact = state.visual.impact;
-  if (!impact) return;
-  const point = projectWorld(impact);
-  const alpha = clamp(impact.remaining / (impact.tone === "core" ? 0.3 : 0.24), 0, 1);
-  const color = impact.tone === "core" ? COLORS.fire : impact.tone === "armor" ? COLORS.porcelainLight : COLORS.rustBright;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  const radius = 14 + (1 - alpha) * 44;
-  ellipse(ctx, { x: point.x, y: point.y - 42 }, radius, radius * 0.54);
-  ctx.stroke();
-  ctx.fillStyle = color;
-  for (let index = 0; index < 5; index += 1) {
-    const angle = now * 5 + (Math.PI * 2 * index) / 5;
-    ctx.fillRect(point.x + Math.cos(angle) * radius - 2, point.y - 38 + Math.sin(angle) * radius * 0.45 - 2, 4, 4);
-  }
-  ctx.restore();
-}
-
-function drawCoreClosureWarning(ctx, state) {
-  if (state.phase !== PHASE.CORE_OPEN || state.phaseTime > 0.6) return;
-  const point = projectWorld(state.boss);
-  const progress = 1 - clamp(state.phaseTime / 0.6, 0, 1);
-  ctx.save();
-  ctx.strokeStyle = `rgba(197,92,50,${0.45 + progress * 0.35})`;
-  ctx.lineWidth = 3 + progress * 2;
-  ctx.setLineDash([11, 8]);
-  ellipse(ctx, point, CONFIG.armorShockRadius * VIEW.scaleX, CONFIG.armorShockRadius * VIEW.scaleY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.restore();
-}
-
-function drawMinimalGameOver(ctx, state) {
-  const alpha = 0.62;
-  ctx.save();
-  ctx.fillStyle = `rgba(8,6,5,${alpha})`;
-  ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  const target = state.lock ? projectWorld(state.lock.zone) : projectWorld(state.player);
-  const player = projectWorld(state.player);
-  ctx.strokeStyle = COLORS.rustBright;
-  ctx.lineWidth = 3;
-  ellipse(ctx, target, 76, 46);
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.enamelLight;
-  ctx.lineWidth = 3;
-  ellipse(ctx, player, 16, 8);
-  ctx.stroke();
-  ctx.fillStyle = COLORS.white;
-  ctx.textAlign = "center";
-  ctx.font = "700 16px system-ui, sans-serif";
-  ctx.fillText(state.death?.tip || "다음에는 위험 구역 밖으로 이동", VIEW.centerX, 618);
-  if (state.gameOverElapsed >= CONFIG.restartDelay) {
-    ctx.fillStyle = COLORS.enamelLight;
-    ctx.font = "800 14px system-ui, sans-serif";
-    ctx.fillText("ENTER / SPACE · 다시 속이기", VIEW.centerX, 650);
-  }
-  ctx.restore();
-}
-
-function waitingState() {
+function snapshotNode(node) {
   return {
-    phase: PHASE.WAITING,
-    phaseTime: 0,
-    player: { x: CONFIG.playerStartX, y: CONFIG.playerStartY, lastMove: { x: 0, y: -1 } },
-    boss: { x: CONFIG.bossX, y: CONFIG.bossY, coreOpen: false },
-    memory: [],
-    lock: null,
-    explore: null,
-    timers: { invulnerable: 0 },
-    visual: { lastDash: null, attack: null, impact: null, shake: 0 },
+    position: node.position.clone(),
+    quaternion: node.quaternion.clone(),
+    scale: node.scale.clone(),
+    visible: node.visible,
   };
 }
 
-export function renderGame(ctx, state, { now = 0 } = {}) {
-  ctx.save();
-  ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  ctx.fillStyle = COLORS.deepSoot;
-  ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  drawArena(ctx, now);
+function restoreNode(node, snapshot) {
+  node.position.copy(snapshot.position);
+  node.quaternion.copy(snapshot.quaternion);
+  node.scale.copy(snapshot.scale);
+  node.visible = snapshot.visible;
+}
 
-  const scene = state.phase === PHASE.WAITING ? waitingState() : state;
-  drawExploreWarning(ctx, scene);
-  drawKilnTarget(ctx, scene, now);
-  drawDashSkid(ctx, scene);
-  drawCoreClosureWarning(ctx, scene);
-  drawBoss(ctx, scene, now);
-  drawPlayer(ctx, scene, now);
-  drawImpact(ctx, scene, now);
-  if (state.phase === PHASE.GAME_OVER) drawMinimalGameOver(ctx, state);
-  ctx.restore();
+function swordTipFromBlade(sword, blade) {
+  const positions = blade.geometry?.getAttribute("position");
+  if (!positions) throw new Error("short_sword_blade geometry has no positions");
+  sword.updateWorldMatrix(true, false);
+  blade.updateWorldMatrix(true, false);
+  const candidate = new THREE.Vector3();
+  const best = new THREE.Vector3();
+  let greatestDistance = -1;
+  for (let index = 0; index < positions.count; index += 1) {
+    candidate.fromBufferAttribute(positions, index);
+    blade.localToWorld(candidate);
+    sword.worldToLocal(candidate);
+    const distance = candidate.lengthSq();
+    if (distance > greatestDistance) {
+      greatestDistance = distance;
+      best.copy(candidate);
+    }
+  }
+  return best;
+}
+
+function disposeObject(root) {
+  root?.traverse((item) => {
+    if (item.geometry) item.geometry.dispose();
+    const materials = Array.isArray(item.material) ? item.material : [item.material];
+    for (const material of materials) {
+      if (!material) continue;
+      for (const value of Object.values(material)) {
+        if (value?.isTexture) value.dispose();
+      }
+      material.dispose();
+    }
+  });
+}
+
+function assertNodes(kind, root) {
+  const missing = REQUIRED_NODES[kind].filter((name) => !root.getObjectByName(name));
+  if (missing.length) throw new Error(`${kind} GLB missing named nodes: ${missing.join(", ")}`);
+}
+
+function makeMarkerLayer() {
+  const root = new THREE.Group();
+  root.name = "combat_markers";
+  const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x20110b, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const rustEdgeMaterial = new THREE.MeshBasicMaterial({ color: 0xd16a31, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const ivoryEdgeMaterial = new THREE.MeshBasicMaterial({ color: 0xe2c58b, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const tealMaterial = new THREE.MeshBasicMaterial({ color: 0x56b8ae, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const impactMaterial = new THREE.MeshBasicMaterial({ color: 0xffc36c, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+
+  const explore = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), floorMaterial);
+  explore.rotation.x = -Math.PI / 2;
+  explore.position.y = ARENA_SURFACE + 0.014;
+  root.add(explore);
+
+  // The warning remains a physical scorch lane: charcoal heat damage bounded by kiln-orange and kiln-ivory seams.
+  const exploreRustEdges = [-1, 1].map(() => {
+    const edge = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), rustEdgeMaterial.clone());
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.y = ARENA_SURFACE + 0.018;
+    root.add(edge);
+    return edge;
+  });
+  const exploreIvoryEdges = [-1, 1].map(() => {
+    const edge = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), ivoryEdgeMaterial.clone());
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.y = ARENA_SURFACE + 0.02;
+    root.add(edge);
+    return edge;
+  });
+
+  const plateShape = new THREE.Shape();
+  plateShape.moveTo(-0.96, -0.52);
+  plateShape.lineTo(-0.48, -0.91);
+  plateShape.lineTo(0.24, -0.82);
+  plateShape.lineTo(0.96, -0.31);
+  plateShape.lineTo(0.73, 0.58);
+  plateShape.lineTo(0.10, 0.94);
+  plateShape.lineTo(-0.77, 0.71);
+  plateShape.lineTo(-1.0, 0.08);
+  plateShape.closePath();
+  const lockPlate = new THREE.Mesh(
+    new THREE.ShapeGeometry(plateShape),
+    new THREE.MeshStandardMaterial({ color: 0x4a2616, roughness: 0.96, metalness: 0.12, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  lockPlate.rotation.x = -Math.PI / 2;
+  lockPlate.position.y = ARENA_SURFACE + 0.018;
+  root.add(lockPlate);
+  const lockCut = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ color: 0xe2c58b, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  lockCut.rotation.set(-Math.PI / 2, 0, -0.28);
+  lockCut.position.y = ARENA_SURFACE + 0.023;
+  root.add(lockCut);
+  const lockCracks = new THREE.Group();
+  lockCracks.rotation.x = -Math.PI / 2;
+  lockCracks.position.y = ARENA_SURFACE + 0.021;
+  // Spent prediction is a scarred plate, not a HUD ring: fired seams radiate from the missed driver point.
+  for (const [angle, length, offset] of [
+    [-2.72, 0.50, 0.37], [-1.88, 0.62, 0.34], [-1.10, 0.45, 0.42], [-0.30, 0.60, 0.35],
+    [0.52, 0.48, 0.39], [1.32, 0.64, 0.33], [2.20, 0.46, 0.40],
+  ]) {
+    const crack = new THREE.Mesh(
+      new THREE.PlaneGeometry(length, 0.075),
+      new THREE.MeshBasicMaterial({ color: 0x9a6840, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    crack.rotation.z = angle;
+    crack.position.set(Math.cos(angle) * offset, Math.sin(angle) * offset, 0);
+    lockCracks.add(crack);
+  }
+  root.add(lockCracks);
+
+  const trail = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), tealMaterial);
+  trail.rotation.x = -Math.PI / 2;
+  trail.position.y = ARENA_SURFACE + 0.024;
+  root.add(trail);
+
+  const attack = new THREE.Mesh(new THREE.RingGeometry(0.78, 1, 24), impactMaterial);
+  attack.rotation.x = -Math.PI / 2;
+  attack.position.y = ARENA_SURFACE + 0.028;
+  root.add(attack);
+  return { root, explore, exploreRustEdges, exploreIvoryEdges, exploreKey: null, lockPlate, lockCut, lockCracks, trail, attack };
+}
+
+function makeCoreContact() {
+  const root = new THREE.Group();
+  root.name = "core_contact_feedback";
+  const flash = new THREE.Mesh(
+    new THREE.SphereGeometry(0.11, 6, 4),
+    new THREE.MeshBasicMaterial({ color: 0xfff5d2, transparent: true, opacity: 0.96, depthTest: false }),
+  );
+  root.add(flash);
+  const spokeVertices = new Float32Array([
+    -0.26, 0, 0, 0.26, 0, 0,
+    0, -0.21, 0, 0, 0.21, 0,
+    -0.17, -0.14, 0, 0.17, 0.14, 0,
+    -0.17, 0.14, 0, 0.17, -0.14, 0,
+  ]);
+  const spokesGeometry = new THREE.BufferGeometry();
+  spokesGeometry.setAttribute("position", new THREE.BufferAttribute(spokeVertices, 3));
+  const spokes = new THREE.LineSegments(spokesGeometry, new THREE.LineBasicMaterial({ color: 0xd8d2c2, transparent: true, opacity: 0.86, depthTest: false }));
+  root.add(spokes);
+  root.visible = false;
+  return { root, flash, spokes };
+}
+
+function setTrail(marker, dash) {
+  if (!dash || dash.remaining <= 0) {
+    marker.trail.visible = false;
+    return;
+  }
+  const from = coreToWorld(dash.from);
+  const to = coreToWorld(dash.to);
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const length = Math.hypot(dx, dz);
+  marker.trail.visible = length > 0.001;
+  marker.trail.position.set((from.x + to.x) / 2, ARENA_SURFACE + 0.024, (from.z + to.z) / 2);
+  marker.trail.scale.set(length, 0.105, 1);
+  marker.trail.rotation.z = -Math.atan2(dz, dx);
+  marker.trail.material.opacity = clamp(dash.remaining / dash.duration, 0, 1) * 0.8;
+}
+
+function replaceExploreGeometry(marker, centerX, halfWidth) {
+  const key = `${centerX.toFixed(5)}:${halfWidth.toFixed(5)}`;
+  if (marker.exploreKey === key) return;
+  const minX = Math.max(-ARENA_RADIUS, centerX - halfWidth);
+  const maxX = Math.min(ARENA_RADIUS, centerX + halfWidth);
+  const steps = 32;
+  const upper = [];
+  const lower = [];
+  for (let index = 0; index <= steps; index += 1) {
+    const x = minX + ((maxX - minX) * index) / steps;
+    const reach = Math.sqrt(Math.max(0, ARENA_RADIUS ** 2 - x ** 2));
+    upper.push(new THREE.Vector2(x, reach));
+    lower.push(new THREE.Vector2(x, -reach));
+  }
+  const shape = new THREE.Shape([...upper, ...lower.reverse()]);
+  const nextGeometry = new THREE.ShapeGeometry(shape);
+  marker.explore.geometry.dispose();
+  marker.explore.geometry = nextGeometry;
+  marker.exploreKey = key;
+}
+
+function updateMarkers(marker, state) {
+  const isExplore = Boolean(state.explore) && (state.phase === PHASE.EXPLORE || state.phase === PHASE.GAME_OVER);
+  marker.explore.visible = Boolean(isExplore);
+  for (const edge of [...marker.exploreRustEdges, ...marker.exploreIvoryEdges]) edge.visible = Boolean(isExplore);
+  if (isExplore) {
+    const centerX = state.explore.lineX * WORLD_X;
+    const halfWidth = CONFIG.exploreLaneHalfWidth * WORLD_X;
+    const urgency = phaseProgress(state, 0.55);
+    replaceExploreGeometry(marker, centerX, halfWidth);
+    marker.explore.position.set(0, ARENA_SURFACE + 0.014, 0);
+    marker.explore.scale.set(1, 1, 1);
+    marker.explore.material.opacity = 0.58 + urgency * 0.16;
+    for (const [index, side] of [-1, 1].entries()) {
+      const edgeX = centerX + side * halfWidth;
+      const edgeVisible = Math.abs(edgeX) < ARENA_RADIUS;
+      marker.exploreRustEdges[index].visible = edgeVisible;
+      marker.exploreIvoryEdges[index].visible = edgeVisible;
+      if (!edgeVisible) continue;
+      const edgeLength = Math.sqrt(Math.max(0, ARENA_RADIUS ** 2 - edgeX ** 2)) * 2;
+      marker.exploreRustEdges[index].position.set(edgeX, ARENA_SURFACE + 0.018, 0);
+      marker.exploreRustEdges[index].scale.set(0.075, edgeLength, 1);
+      marker.exploreRustEdges[index].material.opacity = 0.84 + urgency * 0.12;
+      marker.exploreIvoryEdges[index].position.set(edgeX - side * 0.11, ARENA_SURFACE + 0.02, 0);
+      marker.exploreIvoryEdges[index].scale.set(0.042, edgeLength, 1);
+      marker.exploreIvoryEdges[index].material.opacity = 0.82 + urgency * 0.14;
+    }
+  }
+
+  const hasLock = Boolean(state.lock);
+  marker.lockPlate.visible = hasLock;
+  marker.lockCut.visible = hasLock;
+  marker.lockCracks.visible = false;
+  if (hasLock) {
+    const target = coreToWorld(state.lock.zone);
+    const locked = state.phase === PHASE.LOCK || state.phase === PHASE.RELOCK || state.phase === PHASE.PREDICTION;
+    const used = state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR || state.phase === PHASE.GAME_OVER;
+    marker.lockPlate.position.set(target.x, ARENA_SURFACE + 0.018, target.z);
+    marker.lockPlate.scale.set(CONFIG.lockZoneRadiusX * WORLD_X, CONFIG.lockZoneRadiusY * WORLD_Z, 1);
+    marker.lockPlate.material.color.setHex(used ? 0x3a1c10 : 0x4a2616);
+    marker.lockPlate.material.opacity = locked ? 0.88 : used ? 0.78 : 0.42;
+    marker.lockCut.position.set(target.x, ARENA_SURFACE + 0.023, target.z);
+    marker.lockCut.scale.set(CONFIG.lockZoneRadiusX * WORLD_X * 1.22, 0.035, 1);
+    marker.lockCut.material.opacity = locked ? 0.76 : used ? 0.44 : 0.38;
+    marker.lockCracks.visible = used;
+    marker.lockCracks.position.set(target.x, ARENA_SURFACE + 0.021, target.z);
+    marker.lockCracks.scale.set(CONFIG.lockZoneRadiusX * WORLD_X, CONFIG.lockZoneRadiusY * WORLD_Z, 1);
+    for (const crack of marker.lockCracks.children) crack.material.opacity = used ? 0.84 : 0;
+  }
+
+  setTrail(marker, state.visual?.lastDash);
+  const attack = state.visual?.impact;
+  // Direct core contact is drawn at the furnace itself, never as a second floor AOE.
+  marker.attack.visible = Boolean(attack?.remaining > 0 && attack.tone !== "core");
+  if (attack?.remaining > 0 && attack.tone !== "core") {
+    const hit = coreToWorld(attack);
+    marker.attack.position.set(hit.x, ARENA_SURFACE + 0.028, hit.z);
+    const scale = (attack.tone === "core" ? 0.7 : 0.46) + (1 - attack.remaining / 0.3) * 0.8;
+    marker.attack.scale.set(scale, scale, 1);
+    marker.attack.material.color.setHex(attack.tone === "core" ? 0xffc36c : 0x59bcb3);
+    marker.attack.material.opacity = clamp(attack.remaining / 0.3, 0, 1);
+  }
+}
+
+function applyPlayerRig(player, state, now, previousPosition, directCoreWorld = null) {
+  const root = player.root;
+  const next = coreToWorld(state.player);
+  root.position.copy(next);
+  const move = state.player.lastMove || { x: 0, y: -1 };
+  const boss = coreToWorld(state.boss);
+  // The duelist always presents the blade to the boss; locomotion is carried by hips and feet.
+  root.rotation.y = Math.atan2(boss.x - next.x, boss.z - next.z);
+  const moved = previousPosition.distanceTo(next) > 0.002;
+  const bob = moved ? Math.sin(now * 17) * 0.045 : Math.sin(now * 2.1) * 0.012;
+  player.nodes.hips.position.y += bob;
+  player.nodes.hips.rotation.x += moved ? move.y * 0.12 : 0;
+  player.nodes.hips.rotation.z += moved ? -move.x * 0.10 : 0;
+  player.nodes.feet.rotation.z += moved ? Math.sin(now * 17) * 0.12 : 0;
+  if (state.visual?.lastDash?.remaining > 0) {
+    player.nodes.torso.rotation.x -= 0.24;
+    player.nodes.feet.position.z -= 0.10;
+  }
+  if (state.visual?.attack?.remaining > 0) {
+    const swing = 1 - state.visual.attack.remaining / 0.24;
+    const lunge = Math.sin(swing * Math.PI);
+    // Preserve the authoritative root/ground point: only the upper rigid chain reaches for the open furnace.
+    player.nodes.torso.position.z += lunge * 0.34;
+    player.nodes.torso.rotation.x -= lunge * 0.25;
+    player.nodes.arm_weapon.position.z += lunge * 0.48;
+    player.nodes.arm_weapon.position.y += lunge * 0.075;
+    player.nodes.sword.position.z += lunge * 0.66;
+    player.nodes.arm_weapon.rotation.z -= lunge * 0.95;
+    player.nodes.sword.rotation.y -= lunge * 0.36;
+  }
+  if (directCoreWorld) {
+    // Keep the gameplay root fixed. Only the authored upper chain is translated in its parent space to put the real blade tip on the core.
+    player.root.updateWorldMatrix(true, false);
+    const upperRoot = player.nodes.torso;
+    const currentTip = player.swordTipLocal.clone();
+    player.nodes.sword.localToWorld(currentTip);
+    const upperParent = upperRoot.parent;
+    const from = upperParent.worldToLocal(currentTip.clone());
+    const to = upperParent.worldToLocal(directCoreWorld.clone());
+    upperRoot.position.add(to.sub(from));
+    player.root.updateWorldMatrix(true, false);
+    const correctedTip = player.swordTipLocal.clone();
+    player.nodes.sword.localToWorld(correctedTip);
+    player.tipCoreError = correctedTip.distanceTo(directCoreWorld);
+  } else {
+    player.tipCoreError = null;
+  }
+  if (state.phase === PHASE.GAME_OVER) {
+    player.nodes.hips.position.y -= 0.14;
+    player.nodes.hips.rotation.x += 0.38;
+    player.nodes.torso.rotation.x += 0.64;
+    player.nodes.feet.rotation.z -= 0.22;
+    player.nodes.arm_weapon.rotation.z += 0.72;
+    player.nodes.sword.rotation.x += 0.48;
+  }
+  if (state.timers?.invulnerable > 0) player.nodes.torso.rotation.z += Math.sin(now * 36) * 0.08;
+}
+
+function applyBossRig(boss, state, now) {
+  const root = boss.root;
+  root.position.copy(coreToWorld(state.boss));
+  const nodes = boss.nodes;
+  const lockTarget = state.lock ? coreToWorld(state.lock.zone) : null;
+  // The authored piledriver rests along local +X, so aim that axis—not Three's default +Z—at the locked floor point.
+  const yaw = lockTarget
+    ? Math.atan2(root.position.z - lockTarget.z, lockTarget.x - root.position.x)
+    : 0;
+  const resting = Math.sin(now * 1.8) * 0.018;
+  nodes.body.position.y += resting;
+
+  for (let index = 0; index < 3; index += 1) {
+    const memory = nodes[`memory_0${index + 1}`];
+    memory.visible = index < state.memory.length;
+    if (state.memory.length >= 3 && state.predictedSide) memory.rotation.z = 0;
+  }
+
+  if (state.phase === PHASE.COMBINE || state.phase === PHASE.LOCK || state.phase === PHASE.RELOCK) {
+    const weight = state.phase === PHASE.COMBINE ? easeOutCubic(phaseProgress(state, CONFIG.combineDuration)) : 1;
+    nodes.rotary_mount.rotation.y += yaw * weight;
+    nodes.upper_arm.rotation.z -= 0.10 * weight;
+    nodes.bellows_elbow.rotation.y += 0.14 * weight;
+    nodes.forearm.rotation.y -= 0.12 * weight;
+    nodes.brace.rotation.z += 0.17 * weight;
+  }
+
+  if (state.phase === PHASE.PREDICTION) {
+    const strike = easeOutCubic(phaseProgress(state, 0.78));
+    nodes.rotary_mount.rotation.y += yaw;
+    nodes.upper_arm.rotation.z -= 0.12 + strike * 0.32;
+    nodes.bellows_elbow.rotation.y += 0.15;
+    nodes.forearm.rotation.y -= 0.16 + strike * 0.28;
+    nodes.brace.rotation.z += 0.22;
+  }
+
+  if (state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR) {
+    const coreElapsed = timingForRound(state.round).coreOpen - state.phaseTime;
+    const opening = state.phase === PHASE.ROUND_CLEAR ? 1 : easeOutCubic(clamp(coreElapsed / 0.24, 0, 1));
+    nodes.body.rotation.z -= 0.40 * opening;
+    nodes.rotary_mount.rotation.y += state.lock ? yaw : 0.18;
+    nodes.upper_arm.rotation.z -= 0.27;
+    nodes.forearm.rotation.y -= 0.22;
+    nodes.brace.rotation.z += 0.34;
+    nodes.shutter_l.position.x -= 0.82 * opening;
+    nodes.shutter_r.position.x += 0.82 * opening;
+    nodes.shutter_l.rotation.z -= 0.48 * opening;
+    nodes.shutter_r.rotation.z += 0.48 * opening;
+    nodes.core.scale.setScalar(1 + Math.sin(now * 18) * 0.04);
+  }
+
+  const driverProgress = state.phase === PHASE.PREDICTION
+    ? easeOutCubic(phaseProgress(state, 0.78))
+    : state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR ? 1 : 0;
+  if (state.lock && driverProgress > 0) {
+    const target = coreToWorld(state.lock.zone);
+    nodes.driver.parent.updateWorldMatrix(true, false);
+    const targetLocal = nodes.driver.parent.worldToLocal(target.clone());
+    nodes.driver.position.lerpVectors(boss.snapshots.driver.position, targetLocal, driverProgress);
+    nodes.driver.updateWorldMatrix(true, false);
+    const driverWorld = nodes.driver.getWorldPosition(new THREE.Vector3());
+    boss.driverContactError = driverWorld.distanceTo(target);
+  } else {
+    boss.driverContactError = null;
+  }
+}
+
+function makeRig(kind, root) {
+  assertNodes(kind, root);
+  const nodes = Object.fromEntries(REQUIRED_NODES[kind].map((name) => [name, root.getObjectByName(name)]));
+  const snapshots = Object.fromEntries(Object.entries(nodes).map(([name, node]) => [name, snapshotNode(node)]));
+  const blade = kind === "player" ? root.getObjectByName("short_sword_blade") : null;
+  if (kind === "player" && (!blade?.isMesh || !nodes.sword)) throw new Error("player GLB missing short_sword_blade mesh");
+  return { root, nodes, snapshots, blade, swordTipLocal: blade ? swordTipFromBlade(nodes.sword, blade) : null, tipCoreError: null, driverContactError: null };
+}
+
+function resetRig(rig) {
+  for (const [name, node] of Object.entries(rig.nodes)) restoreNode(node, rig.snapshots[name]);
 }
 
 export function createRenderer(canvas) {
-  if (!canvas || typeof canvas.getContext !== "function") {
-    throw new TypeError("Canvas element is required");
+  if (!(canvas instanceof HTMLCanvasElement)) throw new TypeError("Canvas element is required");
+  const webgl = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
+  webgl.outputColorSpace = THREE.SRGBColorSpace;
+  webgl.shadowMap.enabled = true;
+  webgl.shadowMap.type = THREE.BasicShadowMap;
+  webgl.setPixelRatio(Math.min(1.5, Math.max(1, globalThis.devicePixelRatio || 1)));
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0d0b09);
+  scene.fog = new THREE.Fog(0x0d0b09, 22, 34);
+  const camera = new THREE.PerspectiveCamera(35, 16 / 9, 0.1, 60);
+  // Same 35° quarter view; shortened uniformly so the full kiln occupies ~90% of a 320px-wide frame.
+  camera.position.set(7.54, 9.43, 10.89);
+  camera.lookAt(0, ARENA_SURFACE, 0.85);
+  const ambient = new THREE.HemisphereLight(0x73869a, 0x4a2b16, 2.55);
+  scene.add(ambient);
+  const key = new THREE.DirectionalLight(0xaecbe0, 4.2);
+  key.position.set(-7, 13, 8);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.left = -11;
+  key.shadow.camera.right = 11;
+  key.shadow.camera.top = 11;
+  key.shadow.camera.bottom = -11;
+  scene.add(key);
+  const furnaceLight = new THREE.PointLight(0xff5727, 0, 6.5, 2);
+  scene.add(furnaceLight);
+  const markers = makeMarkerLayer();
+  scene.add(markers.root);
+  const contact = makeCoreContact();
+  scene.add(contact.root);
+
+  const loader = new GLTFLoader();
+  let status = "loading";
+  let error = null;
+  let arena = null;
+  let player = null;
+  let boss = null;
+  let disposed = false;
+  let lost = false;
+  let previousPlayer = new THREE.Vector3();
+  const coreWorld = new THREE.Vector3();
+  let renderedWidth = 0;
+  let renderedHeight = 0;
+  let renderedRatio = 0;
+  let notifyStatus = () => {};
+  let resolveReady;
+  let driverContactError = null;
+  let swordTipError = null;
+  let priorDirectAttackRemaining = null;
+  let contactLatchRemaining = 0;
+  let previousRenderNow = null;
+  let ready = new Promise((resolve) => { resolveReady = resolve; });
+
+  function setStatus(next, nextError = null) {
+    status = next;
+    error = nextError;
+    notifyStatus({ status, error });
   }
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D context is unavailable");
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
-    const ratio = Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
-    const width = Math.max(1, Math.round((rect.width || LOGICAL_WIDTH) * ratio));
-    const height = Math.max(1, Math.round((rect.height || LOGICAL_HEIGHT) * ratio));
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
+    const width = Math.max(1, Math.round(rect.width || 1280));
+    const height = Math.max(1, Math.round(rect.height || 720));
+    const ratio = Math.min(1.5, Math.max(1, globalThis.devicePixelRatio || 1));
+    if (width === renderedWidth && height === renderedHeight && ratio === renderedRatio) return;
+    renderedWidth = width;
+    renderedHeight = height;
+    renderedRatio = ratio;
+    webgl.setPixelRatio(ratio);
+    webgl.setSize(width, height, false);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }
+
+  function clearAssets() {
+    for (const item of [arena?.root, player?.root, boss?.root]) {
+      if (!item) continue;
+      scene.remove(item);
+      disposeObject(item);
+    }
+    arena = null;
+    player = null;
+    boss = null;
+  }
+
+  async function loadAssets() {
+    if (disposed || lost) return;
+    clearAssets();
+    setStatus("loading");
+    try {
+      const [arenaAsset, playerAsset, bossAsset] = await Promise.all([
+        loader.loadAsync(ASSETS.arena.href), loader.loadAsync(ASSETS.player.href), loader.loadAsync(ASSETS.boss.href),
+      ]);
+      if (disposed || lost) return;
+      arena = makeRig("arena", arenaAsset.scene);
+      player = makeRig("player", playerAsset.scene);
+      boss = makeRig("boss", bossAsset.scene);
+      arena.root.traverse((item) => { if (item.isMesh) { item.receiveShadow = true; item.castShadow = false; } });
+      player.root.traverse((item) => { if (item.isMesh) { item.castShadow = PLAYER_SHADOW_MESHES.has(item.name); item.receiveShadow = true; } });
+      boss.root.traverse((item) => { if (item.isMesh) { item.castShadow = BOSS_SHADOW_MESHES.has(item.name); item.receiveShadow = true; } });
+      scene.add(arena.root, player.root, boss.root);
+      previousPlayer.copy(player.root.position);
+      setStatus("ready");
+      resolveReady?.();
+      resolveReady = null;
+    } catch (loadError) {
+      clearAssets();
+      setStatus("error", loadError instanceof Error ? loadError : new Error(String(loadError)));
     }
   }
 
-  function render(state, options = {}) {
-    resize();
-    ctx.setTransform(canvas.width / LOGICAL_WIDTH, 0, 0, canvas.height / LOGICAL_HEIGHT, 0, 0);
-    renderGame(ctx, state, options);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  function retry() {
+    if (status !== "error") return ready;
+    ready = new Promise((resolve) => { resolveReady = resolve; });
+    void loadAssets();
+    return ready;
   }
 
-  return { render, resize };
-}
+  function render(state, { now = 0 } = {}) {
+    if (disposed || lost) return;
+    const elapsedSinceRender = previousRenderNow === null ? 0 : Math.max(0, now - previousRenderNow);
+    previousRenderNow = now;
+    contactLatchRemaining = Math.max(0, contactLatchRemaining - elapsedSinceRender);
+    resize();
+    if (status === "ready" && arena && player && boss) {
+      resetRig(arena);
+      resetRig(player);
+      resetRig(boss);
+      updateMarkers(markers, state);
+      applyBossRig(boss, state, now);
+      boss.root.updateWorldMatrix(true, false);
+      boss.nodes.core.getWorldPosition(coreWorld);
+      const attack = state.visual?.attack;
+      const directCoreAttack = Boolean(state.boss.coreOpen && attack?.hit && !attack.armor && attack.remaining > 0);
+      const crossesImpactPeak = directCoreAttack && (
+        (priorDirectAttackRemaining === null && attack.remaining <= 0.12)
+        || (priorDirectAttackRemaining !== null && priorDirectAttackRemaining >= 0.12 && attack.remaining <= 0.12)
+      );
+      const atImpactPeak = directCoreAttack && attack.remaining >= 0.105 && attack.remaining <= 0.135;
+      if (crossesImpactPeak || atImpactPeak) contactLatchRemaining = 0.09;
+      const directCoreImpact = directCoreAttack && contactLatchRemaining > 0;
+      applyPlayerRig(player, state, now, previousPlayer, directCoreImpact ? coreWorld : null);
+      furnaceLight.position.copy(coreWorld);
+      const contactFrame = directCoreImpact;
+      contact.root.visible = contactFrame;
+      if (contactFrame) {
+        contact.root.position.copy(coreWorld);
+        contact.root.quaternion.copy(camera.quaternion);
+        const peak = clamp(1 - Math.abs(attack.remaining - 0.12) / 0.12, 0, 1);
+        const flare = 0.88 + peak * 0.62;
+        contact.root.scale.setScalar(flare);
+      }
+      furnaceLight.intensity = contactFrame ? 8.2 : state.boss.coreOpen ? 5.2 : 0.38;
+      driverContactError = boss.driverContactError;
+      swordTipError = player.tipCoreError;
+      priorDirectAttackRemaining = directCoreAttack ? attack.remaining : null;
+      previousPlayer.copy(player.root.position);
+    }
+    webgl.render(scene, camera);
+  }
 
-export const RENDER_SIZE = Object.freeze({ width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT });
+  function dispose() {
+    disposed = true;
+    canvas.removeEventListener("webglcontextlost", onContextLost);
+    canvas.removeEventListener("webglcontextrestored", onContextRestored);
+    clearAssets();
+    markers.root.traverse((item) => { item.geometry?.dispose(); item.material?.dispose(); });
+    contact.root.traverse((item) => { item.geometry?.dispose(); item.material?.dispose(); });
+    webgl.dispose();
+  }
+
+  function onContextLost(event) {
+    event.preventDefault();
+    lost = true;
+    setStatus("context-lost");
+  }
+  function onContextRestored() {
+    if (disposed) return;
+    lost = false;
+    renderedWidth = 0;
+    renderedHeight = 0;
+    renderedRatio = 0;
+    ready = new Promise((resolve) => { resolveReady = resolve; });
+    void loadAssets();
+  }
+
+  canvas.addEventListener("webglcontextlost", onContextLost);
+  canvas.addEventListener("webglcontextrestored", onContextRestored);
+
+  void loadAssets();
+  return {
+    render,
+    resize,
+    retry,
+    dispose,
+    get status() { return status; },
+    get error() { return error; },
+    get ready() { return ready; },
+    get info() {
+      return {
+        ...webgl.info.render,
+        textures: webgl.info.memory.textures,
+        geometries: webgl.info.memory.geometries,
+        driverContactError,
+        swordTipError,
+      };
+    },
+    get isReady() { return status === "ready"; },
+    set onStatusChange(callback) { notifyStatus = typeof callback === "function" ? callback : () => {}; },
+  };
+}

@@ -17,6 +17,12 @@ const muteButton = document.querySelector("button#mute-button");
 const statusLive = document.querySelector("div#status-live");
 const touchControls = document.querySelector("div#touch-controls");
 const startOverlay = document.querySelector("#start-overlay");
+const loadingCopy = document.querySelector("#loading-copy");
+const gameTitle = document.querySelector("#game-title");
+const gameHook = document.querySelector("#game-hook");
+const gameOverOverlay = document.querySelector("#game-over-overlay");
+const gameOverTip = document.querySelector("#game-over-tip");
+const gameOverRestart = document.querySelector("#game-over-restart");
 
 if (!(canvas instanceof HTMLCanvasElement)) throw new Error("#game canvas is required");
 if (!(startButton instanceof HTMLButtonElement)) throw new Error("#start-button is required");
@@ -166,13 +172,41 @@ function processEvents(events) {
 }
 
 function updateOverlay() {
-  if (startOverlay instanceof HTMLElement) {
-    startOverlay.hidden = state.phase !== PHASE.WAITING;
+  if (!(startOverlay instanceof HTMLElement)) return;
+  const ready = renderer.isReady;
+  const error = renderer.status === "error";
+  startOverlay.hidden = ready && state.phase !== PHASE.WAITING;
+  if (loadingCopy instanceof HTMLElement) {
+    loadingCopy.hidden = ready;
+    loadingCopy.textContent = error
+      ? "가마 전장을 불러오지 못했습니다. 다시 시도하세요."
+      : renderer.status === "context-lost"
+        ? "그래픽 장치를 복구하는 중…"
+        : "가마 전장을 불러오는 중…";
+  }
+  if (gameTitle instanceof HTMLElement) gameTitle.hidden = !ready;
+  if (gameHook instanceof HTMLElement) gameHook.hidden = !ready;
+  startButton.hidden = !ready && !error;
+  startButton.textContent = error ? "전장 다시 불러오기" : "아무 전투 입력으로 시작";
+  if (gameOverOverlay instanceof HTMLElement) {
+    gameOverOverlay.hidden = state.phase !== PHASE.GAME_OVER;
+  }
+  if (gameOverTip instanceof HTMLElement && state.phase === PHASE.GAME_OVER) {
+    gameOverTip.textContent = state.death?.tip || "다음에는 위험 구역 밖으로 이동";
+  }
+  if (gameOverRestart instanceof HTMLElement && state.phase === PHASE.GAME_OVER) {
+    gameOverRestart.textContent = canRestart(state) ? "ENTER / SPACE 다시 속이기" : "분석 중…";
   }
 }
 
 function startNow() {
   audio.unlock();
+  if (renderer.status === "error") {
+    renderer.retry();
+    updateOverlay();
+    return;
+  }
+  if (!renderer.isReady) return;
   if (state.phase !== PHASE.WAITING) return;
   state = startRun(state);
   processEvents(state.events);
@@ -246,6 +280,8 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (shouldIgnoreKeyboard(event)) return;
+  if (!renderer.isReady) return;
+  if (state.phase === PHASE.WAITING) startNow();
   if (event.code === "Enter" && state.phase !== PHASE.GAME_OVER) return;
   event.preventDefault();
   audio.unlock();
@@ -280,6 +316,7 @@ touchControls.addEventListener("pointerdown", (event) => {
     ? event.target.closest('button[data-control="up"], button[data-control="down"], button[data-control="left"], button[data-control="right"], button[data-control="attack"], button[data-control="dash"]')
     : null;
   if (!(button instanceof HTMLButtonElement)) return;
+  if (!renderer.isReady) return;
   event.preventDefault();
   audio.unlock();
 
@@ -293,6 +330,9 @@ touchControls.addEventListener("pointerdown", (event) => {
     // Pointer capture is an enhancement; the window-level release is the fallback.
   }
 
+  if (state.phase === PHASE.WAITING) {
+    startNow();
+  }
   if (state.phase === PHASE.GAME_OVER) {
     requestRestart();
   } else if (control === "attack" || control === "dash") {
@@ -340,10 +380,14 @@ startButton.addEventListener("click", startNow);
 
 canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 && event.pointerType === "mouse") return;
+  if (!renderer.isReady) return;
   event.preventDefault();
   audio.unlock();
   canvas.focus({ preventScroll: true });
-  if (state.phase === PHASE.GAME_OVER) {
+  if (state.phase === PHASE.WAITING) {
+    startNow();
+    oneShot.attack = true;
+  } else if (state.phase === PHASE.GAME_OVER) {
     requestRestart();
   } else {
     oneShot.attack = true;
@@ -363,30 +407,41 @@ muteButton.addEventListener("click", toggleMute);
 function frame(timestamp) {
   const dt = Math.min(0.1, Math.max(0, (timestamp - lastFrame) / 1000));
   lastFrame = timestamp;
-  const movement = readMovement();
-  const input = {
-    ...movement,
-    dashX: oneShot.dash && dashIntent ? dashIntent.moveX : movement.moveX,
-    dashY: oneShot.dash && dashIntent ? dashIntent.moveY : movement.moveY,
-    attack: oneShot.attack,
-    dash: oneShot.dash,
-    restart: oneShot.restart,
-  };
-  oneShot.attack = false;
-  oneShot.dash = false;
-  oneShot.restart = false;
-  dashIntent = null;
-
-  state = updateGame(state, dt, input);
-  processEvents(state.events);
-  updateOverlay();
+  if (renderer.isReady) {
+    const movement = readMovement();
+    const input = {
+      ...movement,
+      dashX: oneShot.dash && dashIntent ? dashIntent.moveX : movement.moveX,
+      dashY: oneShot.dash && dashIntent ? dashIntent.moveY : movement.moveY,
+      attack: oneShot.attack,
+      dash: oneShot.dash,
+      restart: oneShot.restart,
+    };
+    oneShot.attack = false;
+    oneShot.dash = false;
+    oneShot.restart = false;
+    dashIntent = null;
+    state = updateGame(state, dt, input);
+    processEvents(state.events);
+    updateOverlay();
+  } else {
+    clearInput();
+  }
   renderer.render(state, { now: timestamp / 1000, best });
+  canvas.dataset.renderInfo = JSON.stringify(renderer.info);
   requestAnimationFrame(frame);
 }
 
 updateOverlay();
 renderer.render(state, { now: performance.now() / 1000, best });
+canvas.dataset.renderInfo = JSON.stringify(renderer.info);
 requestAnimationFrame(frame);
+
+renderer.onStatusChange = () => {
+  clearInput();
+  lastFrame = performance.now();
+  updateOverlay();
+};
 
 // Referencing the configuration here also keeps the restart contract visible to assistive UI.
 statusLive.dataset.restartDelay = String(CONFIG.restartDelay);
