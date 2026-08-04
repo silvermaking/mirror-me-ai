@@ -10,7 +10,7 @@ from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "assets/3d"
-REVIEW = ROOT / "work/reviews"
+REVIEW = ROOT / "work/reviews/place"
 
 
 def look_at(obj, target):
@@ -165,11 +165,18 @@ def setup():
 def main():
     REVIEW.mkdir(parents=True, exist_ok=True)
     defaults = setup()
-    for state in ("WAITING", "LOCK", "CORE_OPEN"):
+    for state in ("WAITING", "EXPLORE", "LOCK", "CORE_OPEN"):
         pose_boss(state, defaults)
         bpy.context.view_layer.update()
-        bpy.context.scene.render.filepath = str(REVIEW / f"kiln-scene-{state.lower()}.png")
+        bpy.context.scene.render.filepath = str(REVIEW / f"kiln-place-{state.lower()}.png")
         bpy.ops.render.render(write_still=True)
+    # The mobile readability gate uses the same imported assets and camera, only
+    # reduced raster resolution.  No gameplay/runtime wall is introduced here.
+    bpy.context.scene.render.resolution_x = 320
+    bpy.context.scene.render.resolution_y = 180
+    pose_boss("CORE_OPEN", defaults)
+    bpy.context.scene.render.filepath = str(REVIEW / "kiln-place-core_open-320.png")
+    bpy.ops.render.render(write_still=True)
     print("KILN_SCENE_REVIEW_RENDERED")
 
 
