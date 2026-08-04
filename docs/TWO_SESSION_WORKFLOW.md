@@ -7,7 +7,7 @@
 | 세션 | 브랜치 | 소유 파일 | 현재 할 일 |
 | --- | --- | --- | --- |
 | 1. 총괄 디렉팅 | 로컬 `main` | `docs/`, 방향 잠금, 구현 리뷰, 최종 병합 | 구현 작업 관찰, 장면 PASS/FAIL |
-| 2. 플레이어블 구현 | Codex worktree 구현 브랜치 | `src/`, `tests/`, `index.html`, `styles.css`, 배포 구성 | A안 첫 비주얼 수직 슬라이스 구현 |
+| 2. 플레이어블 구현 | Codex worktree 구현 브랜치 | `src/`, `tests/`, `index.html`, `styles.css`, 자산·배포 구성 | Three.js 3D 렌더러 전환 |
 
 각 세션은 하위 에이전트를 최대 2명만 동시에 쓴다. Session 1은 `미술 제안 + 전투 가독성 검증`, Session 2는 `구현 + 판정 테스트`로 역할을 고정하며 같은 질문을 두 에이전트에게 반복시키지 않는다.
 
@@ -34,7 +34,7 @@ Session 1은 앱의 작업 읽기·대기·메시지 기능으로 Session 2를 �
 
 ## 운영 게이트
 
-1. Session 1이 선택 방향·금지 요소·기준 이미지·모션 타이밍을 커밋한다.
+1. Session 1이 선택 방향·금지 요소·3D 기준 이미지·모션 타이밍·판정 보존 계약을 커밋한다.
 2. 공동 디렉터 승인 뒤 `DIRECTION LOCKED @ <commit SHA>`를 Session 2에 직접 보낸다.
 3. Session 2가 그 SHA를 기준으로 생성된 worktree에서 구현을 시작한다.
 4. Session 1은 구현 파일을 고치지 않고 장면 단위 PASS/FAIL만 반환한다.
