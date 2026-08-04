@@ -3,29 +3,32 @@ import { CONFIG, PHASE } from "./game-core.mjs";
 const LOGICAL_WIDTH = 1280;
 const LOGICAL_HEIGHT = 720;
 const VIEW = Object.freeze({
-  width: LOGICAL_WIDTH,
-  height: LOGICAL_HEIGHT,
   centerX: LOGICAL_WIDTH / 2,
-  centerY: 405,
+  centerY: 404,
   scaleX: 1.03,
   scaleY: 0.77,
 });
 
 const COLORS = Object.freeze({
-  ink: "#05070b",
-  panel: "rgba(7, 11, 17, 0.88)",
-  text: "#f2f7f8",
-  muted: "#9baab1",
-  cyan: "#38eff0",
-  cyanPale: "#dffeff",
-  magenta: "#f044bd",
-  orange: "#ff7547",
-  platinum: "#f7f4df",
-  gold: "#ffd66b",
-  danger: "#ff5d62",
+  soot: "#171313",
+  deepSoot: "#080706",
+  brick: "#513a2b",
+  brickLight: "#80614a",
+  iron: "#211e1b",
+  ironEdge: "#665447",
+  porcelain: "#b9ab91",
+  porcelainLight: "#dfd0b2",
+  brass: "#8d6b36",
+  brassLight: "#c49c50",
+  rust: "#9d422b",
+  rustBright: "#c55c32",
+  ash: "#a69b85",
+  enamel: "#52b7ae",
+  enamelLight: "#b9ece1",
+  heat: "#f3bb62",
+  fire: "#fff0c2",
+  white: "#eee7d9",
 });
-
-const SIDE_LABEL = Object.freeze({ left: "왼쪽", right: "오른쪽" });
 
 export function projectWorld(point) {
   return {
@@ -34,7 +37,15 @@ export function projectWorld(point) {
   };
 }
 
-function roundedRect(ctx, x, y, width, height, radius = 12) {
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function mix(a, b, amount) {
+  return a + (b - a) * amount;
+}
+
+function roundedRect(ctx, x, y, width, height, radius = 8) {
   const r = Math.min(radius, width / 2, height / 2);
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -45,635 +56,672 @@ function roundedRect(ctx, x, y, width, height, radius = 12) {
   ctx.closePath();
 }
 
-function drawPanel(ctx, x, y, width, height, accent = "rgba(199,232,235,.18)") {
+function ellipse(ctx, point, rx, ry) {
+  ctx.beginPath();
+  ctx.ellipse(point.x, point.y, rx, ry, 0, 0, Math.PI * 2);
+}
+
+function line(ctx, from, to) {
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+}
+
+function lines(ctx, segments) {
+  ctx.beginPath();
+  for (const [from, to] of segments) {
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+  }
+}
+
+function vector(from, to) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.max(0.001, Math.hypot(dx, dy));
+  return { x: dx / length, y: dy / length, length };
+}
+
+function pointAlong(from, to, amount) {
+  return { x: mix(from.x, to.x, amount), y: mix(from.y, to.y, amount) };
+}
+
+function perpendicular(direction, amount) {
+  return { x: -direction.y * amount, y: direction.x * amount };
+}
+
+function drawFiringHall(ctx) {
+  const wall = ctx.createLinearGradient(0, 0, 0, 360);
+  wall.addColorStop(0, "#100d0c");
+  wall.addColorStop(0.68, "#272019");
+  wall.addColorStop(1, "#453426");
+  ctx.fillStyle = wall;
+  ctx.fillRect(0, 0, LOGICAL_WIDTH, 460);
+
   ctx.save();
-  roundedRect(ctx, x, y, width, height, 12);
-  ctx.fillStyle = COLORS.panel;
-  ctx.fill();
-  ctx.strokeStyle = accent;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  ctx.globalAlpha = 0.62;
+  for (let index = 0; index < 10; index += 1) {
+    const x = 34 + index * 137;
+    ctx.fillStyle = index % 2 ? "#201913" : "#2c2118";
+    ctx.fillRect(x, 34, 58, 312);
+    ctx.fillStyle = "rgba(206,168,99,.13)";
+    ctx.fillRect(x + 7, 38, 5, 300);
+    ctx.strokeStyle = "rgba(0,0,0,.48)";
+    ctx.lineWidth = 3;
+    for (let y = 72; y < 325; y += 42) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 58, y);
+      ctx.stroke();
+    }
+  }
   ctx.restore();
+
+  const haze = ctx.createLinearGradient(0, 160, 0, 390);
+  haze.addColorStop(0, "rgba(227,190,121,.08)");
+  haze.addColorStop(1, "rgba(15,11,9,0)");
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, 120, LOGICAL_WIDTH, 300);
 }
 
 function drawArena(ctx, now) {
+  drawFiringHall(ctx);
   const rx = CONFIG.arenaRadiusX * VIEW.scaleX;
   const ry = CONFIG.arenaRadiusY * VIEW.scaleY;
+  const center = { x: VIEW.centerX, y: VIEW.centerY };
 
   ctx.save();
-  const glow = ctx.createRadialGradient(
-    VIEW.centerX,
-    VIEW.centerY - 30,
-    30,
-    VIEW.centerX,
-    VIEW.centerY,
-    rx,
-  );
-  glow.addColorStop(0, "#16252b");
-  glow.addColorStop(0.62, "#0c151b");
-  glow.addColorStop(1, "#070b10");
-  ctx.beginPath();
-  ctx.ellipse(VIEW.centerX, VIEW.centerY, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fillStyle = glow;
+  ellipse(ctx, center, rx + 17, ry + 16);
+  ctx.fillStyle = "#17120f";
   ctx.fill();
-  ctx.clip();
+  ctx.strokeStyle = "#6d5845";
+  ctx.lineWidth = 5;
+  ctx.stroke();
 
-  ctx.strokeStyle = "rgba(116, 169, 176, 0.1)";
+  ellipse(ctx, center, rx, ry);
+  ctx.clip();
+  const floor = ctx.createRadialGradient(center.x, center.y - 38, 24, center.x, center.y, rx);
+  floor.addColorStop(0, "#705541");
+  floor.addColorStop(0.56, "#4d382b");
+  floor.addColorStop(1, "#261d18");
+  ctx.fillStyle = floor;
+  ctx.fillRect(center.x - rx, center.y - ry, rx * 2, ry * 2);
+
+  ctx.strokeStyle = "rgba(224,196,152,.18)";
+  ctx.lineWidth = 1.2;
+  for (let ring = 0.19; ring <= 0.95; ring += 0.19) {
+    ellipse(ctx, center, rx * ring, ry * ring);
+    ctx.stroke();
+  }
+  for (let row = -5; row <= 5; row += 1) {
+    const y = center.y + row * 32;
+    const offset = row % 2 ? 28 : 0;
+    ctx.strokeStyle = "rgba(28,19,15,.46)";
+    ctx.beginPath();
+    ctx.moveTo(center.x - rx, y);
+    ctx.lineTo(center.x + rx, y);
+    ctx.stroke();
+    for (let x = center.x - rx + offset; x < center.x + rx; x += 74) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + 32);
+      ctx.stroke();
+    }
+  }
+
+  ctx.strokeStyle = "rgba(12,10,9,.9)";
+  ctx.lineWidth = 11;
+  ellipse(ctx, center, rx * 0.89, ry * 0.89);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(164,128,80,.45)";
+  ctx.lineWidth = 2;
+  ellipse(ctx, center, rx * 0.89, ry * 0.89);
+  ctx.stroke();
+
+  const dust = 0.06 + Math.sin(now * 0.5) * 0.015;
+  ctx.fillStyle = `rgba(239,216,173,${dust})`;
+  for (let index = 0; index < 26; index += 1) {
+    const x = center.x - rx + ((index * 131) % Math.round(rx * 2));
+    const y = center.y - ry + ((index * 71) % Math.round(ry * 2));
+    ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.restore();
+
+  ctx.save();
+  ellipse(ctx, center, rx + 17, ry + 16);
+  ctx.strokeStyle = "rgba(231,208,170,.2)";
   ctx.lineWidth = 1;
-  for (let ring = 0.22; ring < 1; ring += 0.19) {
-    ctx.beginPath();
-    ctx.ellipse(VIEW.centerX, VIEW.centerY, rx * ring, ry * ring, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  for (let x = -360; x <= 360; x += 90) {
-    const top = projectWorld({ x, y: -CONFIG.arenaRadiusY });
-    const bottom = projectWorld({ x, y: CONFIG.arenaRadiusY });
-    ctx.beginPath();
-    ctx.moveTo(top.x, top.y);
-    ctx.lineTo(bottom.x, bottom.y);
-    ctx.stroke();
-  }
-  for (let y = -210; y <= 210; y += 70) {
-    const left = projectWorld({ x: -CONFIG.arenaRadiusX, y });
-    const right = projectWorld({ x: CONFIG.arenaRadiusX, y });
-    ctx.beginPath();
-    ctx.moveTo(left.x, left.y);
-    ctx.lineTo(right.x, right.y);
-    ctx.stroke();
-  }
-
-  const scanY = VIEW.centerY - ry + ((now * 28) % (ry * 2));
-  const scan = ctx.createLinearGradient(0, scanY - 18, 0, scanY + 18);
-  scan.addColorStop(0, "rgba(56,239,240,0)");
-  scan.addColorStop(0.5, "rgba(56,239,240,.035)");
-  scan.addColorStop(1, "rgba(56,239,240,0)");
-  ctx.fillStyle = scan;
-  ctx.fillRect(VIEW.centerX - rx, scanY - 18, rx * 2, 36);
-  ctx.restore();
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(VIEW.centerX, VIEW.centerY, rx, ry, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(205, 239, 240, .38)";
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(VIEW.centerX, VIEW.centerY + 5, rx + 8, ry + 7, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(56,239,240,.09)";
-  ctx.lineWidth = 12;
   ctx.stroke();
   ctx.restore();
 }
 
-function clipArena(ctx) {
-  ctx.beginPath();
-  ctx.ellipse(
-    VIEW.centerX,
-    VIEW.centerY,
-    CONFIG.arenaRadiusX * VIEW.scaleX,
-    CONFIG.arenaRadiusY * VIEW.scaleY,
-    0,
-    0,
-    Math.PI * 2,
-  );
-  ctx.clip();
-}
-
-function drawExploreWarning(ctx, state, now) {
+function drawExploreWarning(ctx, state) {
   if (state.phase !== PHASE.EXPLORE || !state.explore) return;
-  const centerX = projectWorld({ x: state.explore.lineX, y: 0 }).x;
-  const width = CONFIG.exploreLaneHalfWidth * VIEW.scaleX * 2;
-  const remainingRatio = Math.max(0, Math.min(1, state.phaseTime / 0.55));
-  const urgency = 1 - remainingRatio;
-  const flash = 0.5 + Math.sin(now * (18 + urgency * 18)) * 0.5;
-  const pulse = 0.14 + urgency * 0.13 + flash * 0.06;
+  const center = projectWorld({ x: state.explore.lineX, y: 0 });
+  const half = CONFIG.exploreLaneHalfWidth * VIEW.scaleX;
+  const urgency = 1 - clamp(state.phaseTime / 0.55, 0, 1);
+  const top = VIEW.centerY - 210;
+  const bottom = VIEW.centerY + 208;
 
   ctx.save();
-  clipArena(ctx);
-  const gradient = ctx.createLinearGradient(centerX - width / 2, 0, centerX + width / 2, 0);
-  gradient.addColorStop(0, "rgba(255,117,71,0)");
-  gradient.addColorStop(0.2, `rgba(255,117,71,${pulse})`);
-  gradient.addColorStop(0.5, `rgba(255,117,71,${pulse + 0.11})`);
-  gradient.addColorStop(0.8, `rgba(255,117,71,${pulse})`);
-  gradient.addColorStop(1, "rgba(255,117,71,0)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(centerX - width / 2, VIEW.centerY - 250, width, 500);
-  ctx.strokeStyle = COLORS.orange;
-  ctx.lineWidth = 2.5 + urgency * 2;
-  ctx.shadowColor = COLORS.orange;
-  ctx.shadowBlur = urgency * 16;
-  ctx.setLineDash([12, 8]);
-  ctx.beginPath();
-  ctx.moveTo(centerX - width / 2, VIEW.centerY - 235);
-  ctx.lineTo(centerX - width / 2, VIEW.centerY + 235);
-  ctx.moveTo(centerX + width / 2, VIEW.centerY - 235);
-  ctx.lineTo(centerX + width / 2, VIEW.centerY + 235);
-  ctx.stroke();
-
-  const shutterOffset = 215 * remainingRatio;
-  ctx.setLineDash([]);
-  ctx.strokeStyle = `rgba(247,244,223,${0.42 + urgency * 0.5})`;
-  ctx.lineWidth = 2 + urgency * 3;
-  ctx.beginPath();
-  ctx.moveTo(centerX - width / 2 - 8, VIEW.centerY - shutterOffset);
-  ctx.lineTo(centerX + width / 2 + 8, VIEW.centerY - shutterOffset);
-  ctx.moveTo(centerX - width / 2 - 8, VIEW.centerY + shutterOffset);
-  ctx.lineTo(centerX + width / 2 + 8, VIEW.centerY + shutterOffset);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawArmorShockWarning(ctx, state, now) {
-  if (
-    state.phase !== PHASE.CORE_OPEN ||
-    !Number.isFinite(state.phaseTime) ||
-    state.phaseTime > 0.6
-  ) {
-    return;
-  }
-
-  const center = projectWorld(state.boss);
-  const remainingRatio = Math.max(0, Math.min(1, state.phaseTime / 0.6));
-  const urgency = 1 - remainingRatio;
-  const flash = 0.5 + Math.sin(now * (18 + urgency * 14)) * 0.5;
-  const radiusX = CONFIG.armorShockRadius * VIEW.scaleX;
-  const radiusY = CONFIG.armorShockRadius * VIEW.scaleY;
-  const countdownScale = 0.28 + remainingRatio * 0.72;
-
-  ctx.save();
-  clipArena(ctx);
-
-  const warningFill = ctx.createRadialGradient(
-    center.x,
-    center.y,
-    18,
-    center.x,
-    center.y,
-    radiusX,
-  );
-  warningFill.addColorStop(0, `rgba(255,117,71,${0.05 + urgency * 0.08})`);
-  warningFill.addColorStop(0.68, `rgba(255,117,71,${0.035 + urgency * 0.08})`);
-  warningFill.addColorStop(1, `rgba(255,117,71,${0.11 + urgency * 0.16 + flash * 0.07})`);
-  ctx.fillStyle = warningFill;
-  ctx.beginPath();
-  ctx.ellipse(center.x, center.y, radiusX, radiusY, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.strokeStyle = `rgba(255,117,71,${0.52 + urgency * 0.3 + flash * 0.16})`;
+  ctx.globalAlpha = 0.72 + urgency * 0.28;
+  ctx.fillStyle = "rgba(124,46,29,.16)";
+  ctx.fillRect(center.x - half, top, half * 2, bottom - top);
+  ctx.strokeStyle = COLORS.rustBright;
   ctx.lineWidth = 3 + urgency * 2;
-  ctx.setLineDash([12, 8]);
-  ctx.beginPath();
-  ctx.ellipse(center.x, center.y, radiusX, radiusY, 0, 0, Math.PI * 2);
+  lines(ctx, [
+    [{ x: center.x - half, y: top }, { x: center.x - half, y: bottom }],
+    [{ x: center.x + half, y: top }, { x: center.x + half, y: bottom }],
+  ]);
   ctx.stroke();
-
-  ctx.setLineDash([]);
-  ctx.strokeStyle = `rgba(247,244,223,${0.5 + urgency * 0.35})`;
-  ctx.lineWidth = 3 + urgency * 3;
-  ctx.shadowColor = COLORS.orange;
-  ctx.shadowBlur = 10 + urgency * 14;
-  ctx.beginPath();
-  ctx.ellipse(
-    center.x,
-    center.y,
-    radiusX * countdownScale,
-    radiusY * countdownScale,
-    0,
-    0,
-    Math.PI * 2,
-  );
+  ctx.strokeStyle = COLORS.porcelainLight;
+  ctx.lineWidth = 4;
+  const gap = clamp(state.phaseTime / 0.55, 0, 1) * 185;
+  lines(ctx, [
+    [{ x: center.x - half - 8, y: VIEW.centerY - gap }, { x: center.x + half + 8, y: VIEW.centerY - gap }],
+    [{ x: center.x - half - 8, y: VIEW.centerY + gap }, { x: center.x + half + 8, y: VIEW.centerY + gap }],
+  ]);
   ctx.stroke();
   ctx.restore();
 }
 
-function drawWireGhost(ctx, point, alpha = 1) {
-  const p = projectWorld(point);
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.translate(p.x, p.y);
-  ctx.strokeStyle = COLORS.magenta;
-  ctx.fillStyle = "rgba(240,68,189,.08)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(0, 2, 20, 8, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(0, -47);
-  ctx.lineTo(-11, -24);
-  ctx.lineTo(-8, -4);
-  ctx.moveTo(0, -47);
-  ctx.lineTo(11, -24);
-  ctx.lineTo(8, -4);
-  ctx.moveTo(-8, -28);
-  ctx.lineTo(8, -28);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, -55, 8, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawLockPrediction(ctx, state, now) {
+function drawKilnTarget(ctx, state, now) {
   if (!state.lock) return;
-  const zone = state.lock.zone;
-  const center = projectWorld(zone);
-  const origin = projectWorld(state.lock.origin);
-  const boss = projectWorld(state.boss);
-  const strike = state.phase === PHASE.PREDICTION;
-  const resolved = state.phase === PHASE.CORE_OPEN;
-  const remainingRatio = strike
-    ? Math.max(0, Math.min(1, state.phaseTime / 0.55))
-    : 1;
-  const urgency = strike ? 1 - remainingRatio : 0;
-  const pulse = resolved
-    ? 0.04
-    : strike
-      ? 0.24 + urgency * 0.15 + Math.sin(now * (25 + urgency * 18)) * 0.1
-      : 0.18;
+  const target = projectWorld(state.lock.zone);
+  const striking = state.phase === PHASE.PREDICTION;
+  const resolved = state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR;
+  const pulse = 0.6 + Math.sin(now * 12) * 0.15;
+  const rx = CONFIG.lockZoneRadiusX * VIEW.scaleX;
+  const ry = CONFIG.lockZoneRadiusY * VIEW.scaleY;
 
   ctx.save();
-  clipArena(ctx);
-  ctx.globalAlpha = resolved ? 0.22 : 1;
-
-  ctx.beginPath();
-  ctx.moveTo(boss.x, boss.y - 24);
-  ctx.lineTo(center.x - CONFIG.lockZoneRadiusX * VIEW.scaleX * 0.58, center.y);
-  ctx.lineTo(center.x + CONFIG.lockZoneRadiusX * VIEW.scaleX * 0.58, center.y);
-  ctx.closePath();
-  ctx.fillStyle = `rgba(240,68,189,${strike ? 0.17 : 0.08})`;
+  ellipse(ctx, target, rx, ry);
+  ctx.fillStyle = resolved ? "rgba(64,31,23,.24)" : "rgba(137,53,33,.21)";
   ctx.fill();
-
-  ctx.strokeStyle = COLORS.magenta;
-  ctx.lineWidth = strike ? 5 + urgency * 2 : 3;
-  ctx.setLineDash(strike && !resolved ? [] : [15, 9]);
-  ctx.beginPath();
-  ctx.moveTo(boss.x, boss.y - 18);
-  ctx.lineTo(center.x, center.y);
+  ctx.strokeStyle = resolved ? "rgba(55,40,31,.82)" : COLORS.rustBright;
+  ctx.lineWidth = striking ? 5 : 3;
   ctx.stroke();
-
-  ctx.setLineDash([8, 7]);
+  ctx.strokeStyle = resolved ? "rgba(19,16,13,.8)" : `rgba(221,163,104,${pulse})`;
   ctx.lineWidth = 2;
-  ctx.globalAlpha = resolved ? 0.24 : 0.78;
-  ctx.beginPath();
-  ctx.moveTo(origin.x, origin.y);
-  ctx.lineTo(center.x, center.y);
-  ctx.stroke();
-  ctx.globalAlpha = resolved ? 0.22 : 1;
-  ctx.setLineDash([]);
-
-  ctx.beginPath();
-  ctx.ellipse(
-    center.x,
-    center.y,
-    CONFIG.lockZoneRadiusX * VIEW.scaleX,
-    CONFIG.lockZoneRadiusY * VIEW.scaleY,
-    0,
-    0,
-    Math.PI * 2,
-  );
-  ctx.fillStyle = `rgba(240,68,189,${pulse})`;
-  ctx.fill();
-  ctx.strokeStyle = COLORS.platinum;
-  ctx.lineWidth = strike ? 4 : 2;
+  ellipse(ctx, target, rx * 0.66, ry * 0.66);
   ctx.stroke();
 
-  if (strike) {
-    const countdownScale = 0.22 + remainingRatio * 0.78;
-    ctx.strokeStyle = `rgba(247,244,223,${0.55 + urgency * 0.4})`;
-    ctx.shadowColor = COLORS.magenta;
-    ctx.shadowBlur = 10 + urgency * 16;
-    ctx.lineWidth = 2 + urgency * 3;
-    ctx.beginPath();
-    ctx.ellipse(
-      center.x,
-      center.y,
-      CONFIG.lockZoneRadiusX * VIEW.scaleX * countdownScale,
-      CONFIG.lockZoneRadiusY * VIEW.scaleY * countdownScale,
-      0,
-      0,
-      Math.PI * 2,
-    );
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+  if (!resolved) {
+    ctx.fillStyle = COLORS.rust;
+    for (let index = 0; index < 8; index += 1) {
+      const angle = (Math.PI * 2 * index) / 8;
+      const x = target.x + Math.cos(angle) * rx * 0.96;
+      const y = target.y + Math.sin(angle) * ry * 0.96;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.fillRect(-5, -4, 10, 8);
+      ctx.restore();
+    }
   }
-
-  ctx.strokeStyle = COLORS.magenta;
-  ctx.lineWidth = 2;
-  const cross = 15;
-  ctx.beginPath();
-  ctx.moveTo(center.x - cross, center.y);
-  ctx.lineTo(center.x + cross, center.y);
-  ctx.moveTo(center.x, center.y - cross);
-  ctx.lineTo(center.x, center.y + cross);
-  ctx.stroke();
   ctx.restore();
-
-  drawWireGhost(ctx, zone, resolved ? 0.22 : strike ? 1 : 0.82);
 }
 
-function drawDashTrail(ctx, state) {
+function drawDashSkid(ctx, state) {
   const dash = state.visual.lastDash;
   if (!dash) return;
   const from = projectWorld(dash.from);
   const to = projectWorld(dash.to);
-  const duration = Number.isFinite(dash.duration) && dash.duration > 0 ? dash.duration : 0.48;
-  const alpha = Math.max(0, Math.min(1, dash.remaining / duration));
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const length = Math.hypot(dx, dy) || 1;
-  const nx = (-dy / length) * 5;
-  const ny = (dx / length) * 5;
-
+  const alpha = clamp(dash.remaining / dash.duration, 0, 1);
+  const direction = vector(from, to);
+  const normal = perpendicular(direction, 4);
   ctx.save();
-  const gradient = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
-  gradient.addColorStop(0, "rgba(56,239,240,0)");
-  gradient.addColorStop(1, `rgba(56,239,240,${alpha * 0.8})`);
-  ctx.strokeStyle = gradient;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(from.x + nx, from.y + ny);
-  ctx.lineTo(to.x + nx, to.y + ny);
-  ctx.moveTo(from.x - nx, from.y - ny);
-  ctx.lineTo(to.x - nx, to.y - ny);
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.strokeStyle = COLORS.enamel;
+  ctx.lineWidth = 4;
+  lines(ctx, [
+    [{ x: from.x + normal.x, y: from.y + normal.y }, { x: to.x + normal.x, y: to.y + normal.y }],
+    [{ x: from.x - normal.x, y: from.y - normal.y }, { x: to.x - normal.x, y: to.y - normal.y }],
+  ]);
   ctx.stroke();
-  ctx.restore();
-}
-
-function drawEscapeMarker(ctx, state) {
-  const marker = state.visual.escapeMarker;
-  if (!marker) return;
-  const point = projectWorld(marker);
-  const duration = marker.duration > 0 ? marker.duration : 0.72;
-  const alpha = Math.max(0, Math.min(1, marker.remaining / duration));
-  const direction = marker.side === "left" ? -1 : 1;
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.translate(point.x, point.y);
-  ctx.strokeStyle = COLORS.cyan;
-  ctx.fillStyle = "rgba(56,239,240,.12)";
-  ctx.shadowColor = COLORS.cyan;
-  ctx.shadowBlur = 14;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.ellipse(0, 2, 28, 11, 0, 0, Math.PI * 2);
+  ctx.fillStyle = COLORS.enamelLight;
+  ellipse(ctx, to, 5, 2.5);
   ctx.fill();
-  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMemorySlab(ctx, x, y, side, active) {
+  const cutLeft = side === "left";
+  ctx.save();
+  ctx.translate(x, y);
   ctx.beginPath();
-  ctx.moveTo(-direction * 5, -18);
-  ctx.lineTo(direction * 14, -18);
-  ctx.lineTo(direction * 7, -25);
-  ctx.moveTo(direction * 14, -18);
-  ctx.lineTo(direction * 7, -11);
+  if (cutLeft) {
+    ctx.moveTo(-16, -16);
+    ctx.lineTo(3, -16);
+    ctx.lineTo(16, -4);
+    ctx.lineTo(12, 18);
+    ctx.lineTo(-16, 18);
+    ctx.lineTo(-16, 1);
+    ctx.lineTo(-8, -7);
+    ctx.closePath();
+  } else {
+    ctx.moveTo(-3, -16);
+    ctx.lineTo(16, -16);
+    ctx.lineTo(16, 1);
+    ctx.lineTo(8, 9);
+    ctx.lineTo(16, 18);
+    ctx.lineTo(-12, 18);
+    ctx.lineTo(-16, -4);
+    ctx.closePath();
+  }
+  ctx.fillStyle = active ? COLORS.porcelainLight : COLORS.porcelain;
+  ctx.fill();
+  ctx.strokeStyle = active ? COLORS.brassLight : COLORS.ironEdge;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(48,31,22,.74)";
+  ctx.lineWidth = 1.5;
+  line(ctx, { x: -8, y: 4 }, { x: 8, y: 4 });
   ctx.stroke();
   ctx.restore();
 }
 
-function drawArm(ctx, shoulder, target, isLocked) {
-  const dx = target.x - shoulder.x;
-  const dy = target.y - shoulder.y;
-  const elbow = {
-    x: shoulder.x + dx * 0.53 + (dx >= 0 ? 18 : -18),
-    y: shoulder.y + dy * 0.42 - 22,
-  };
+function drawMemoryRack(ctx, state, base, now) {
+  ctx.save();
+  ctx.strokeStyle = COLORS.iron;
+  ctx.lineWidth = 8;
+  line(ctx, { x: base.x - 54, y: base.y - 133 }, { x: base.x + 54, y: base.y - 133 });
+  ctx.stroke();
+  ctx.strokeStyle = COLORS.brass;
+  ctx.lineWidth = 2;
+  line(ctx, { x: base.x - 54, y: base.y - 139 }, { x: base.x + 54, y: base.y - 139 });
+  ctx.stroke();
+
+  // The state machine immediately keeps only the real opposite escape after an
+  // OUTSMART. The still-locked three slabs remain on the boss for this one
+  // physical aftermath, so the empty impact visibly follows from its belief.
+  const lockedAfterimage =
+    (state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR) &&
+    state.lock?.side;
+  const filled = lockedAfterimage
+    ? [state.lock.side, state.lock.side, state.lock.side]
+    : state.memory.slice(-3);
+  const combining = state.phase === PHASE.COMBINE || Boolean(state.lock);
+  for (let index = 0; index < 3; index += 1) {
+    const side = filled[index];
+    const x = base.x + (index - 1) * 37;
+    const wobble = combining && side ? Math.sin(now * 18 + index) * 1.5 : 0;
+    ctx.fillStyle = "#100d0b";
+    roundedRect(ctx, x - 18, base.y - 166, 36, 48, 4);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.ironEdge;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    if (side) drawMemorySlab(ctx, x + wobble, base.y - 143, side, combining);
+  }
+
+  if (combining && state.predictedSide) {
+    const direction = state.predictedSide === "left" ? -1 : 1;
+    ctx.strokeStyle = COLORS.brassLight;
+    ctx.lineWidth = 4;
+    line(ctx, { x: base.x, y: base.y - 119 }, { x: base.x + direction * 62, y: base.y - 105 });
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPileDriver(ctx, from, target, embedded, intensity) {
+  const direction = vector(from, target);
+  const normal = perpendicular(direction, 1);
+  const reach = Math.max(42, direction.length - 10);
+  const end = { x: from.x + direction.x * reach, y: from.y + direction.y * reach };
+  const railStart = { x: from.x + normal.x * 23, y: from.y + normal.y * 23 };
+  const railEnd = { x: end.x + normal.x * 23, y: end.y + normal.y * 23 };
+  const otherStart = { x: from.x - normal.x * 23, y: from.y - normal.y * 23 };
+  const otherEnd = { x: end.x - normal.x * 23, y: end.y - normal.y * 23 };
+  const collar = pointAlong(from, end, 0.24);
+
   ctx.save();
   ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = "#111923";
+  ctx.strokeStyle = "#181510";
+  ctx.lineWidth = 62;
+  line(ctx, from, end);
+  ctx.stroke();
+  ctx.strokeStyle = COLORS.ironEdge;
+  ctx.lineWidth = 50;
+  line(ctx, from, end);
+  ctx.stroke();
+  ctx.strokeStyle = "#30291f";
   ctx.lineWidth = 35;
-  ctx.beginPath();
-  ctx.moveTo(shoulder.x, shoulder.y);
-  ctx.lineTo(elbow.x, elbow.y);
-  ctx.lineTo(target.x, target.y - 22);
+  line(ctx, from, end);
   ctx.stroke();
-  ctx.strokeStyle = isLocked ? "rgba(240,68,189,.8)" : "rgba(197,225,229,.2)";
+  ctx.strokeStyle = COLORS.brass;
   ctx.lineWidth = 3;
+  lines(ctx, [[railStart, railEnd], [otherStart, otherEnd]]);
   ctx.stroke();
-  ctx.fillStyle = "#17212d";
-  ctx.beginPath();
-  ctx.arc(elbow.x, elbow.y, 19, 0, Math.PI * 2);
+
+  ctx.fillStyle = COLORS.porcelain;
+  ctx.strokeStyle = COLORS.iron;
+  ctx.lineWidth = 4;
+  ctx.save();
+  ctx.translate(collar.x, collar.y);
+  ctx.rotate(Math.atan2(direction.y, direction.x));
+  roundedRect(ctx, -24, -39, 48, 78, 7);
   ctx.fill();
   ctx.stroke();
+  ctx.strokeStyle = "rgba(62,42,30,.62)";
+  ctx.lineWidth = 2;
+  lines(ctx, [
+    [{ x: -17, y: -20 }, { x: 17, y: -20 }],
+    [{ x: -17, y: 8 }, { x: 17, y: 8 }],
+  ]);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(end.x, end.y);
+  ctx.rotate(Math.atan2(direction.y, direction.x));
+  ctx.fillStyle = embedded ? "#100e0c" : COLORS.iron;
+  ctx.strokeStyle = embedded ? COLORS.rustBright : COLORS.ironEdge;
+  ctx.lineWidth = 5;
+  roundedRect(ctx, -22, -46, 45, 92, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = embedded ? "rgba(145,61,37,.36)" : "#332a21";
+  ctx.fillRect(-13, -36, 27, 72);
+  ctx.restore();
+
+  if (embedded) {
+    ctx.strokeStyle = `rgba(225,183,118,${0.32 + intensity * 0.28})`;
+    ctx.lineWidth = 2;
+    const cracks = [];
+    for (let index = 0; index < 5; index += 1) {
+      const angle = (Math.PI * 2 * index) / 5 + 0.4;
+      const crackStart = { x: end.x + Math.cos(angle) * 22, y: end.y + Math.sin(angle) * 12 };
+      const crackEnd = { x: end.x + Math.cos(angle) * (45 + index * 4), y: end.y + Math.sin(angle) * (28 + index * 3) };
+      cracks.push([crackStart, crackEnd]);
+    }
+    lines(ctx, cracks);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return { end, direction };
+}
+
+function drawBraceArm(ctx, from, ground) {
+  const elbow = pointAlong(from, ground, 0.48);
+  ctx.save();
+  ctx.strokeStyle = COLORS.iron;
+  ctx.lineWidth = 22;
+  ctx.lineCap = "round";
+  lines(ctx, [[from, elbow], [elbow, ground]]);
+  ctx.stroke();
+  ctx.strokeStyle = COLORS.brass;
+  ctx.lineWidth = 3;
+  lines(ctx, [[from, elbow], [elbow, ground]]);
+  ctx.stroke();
+  ctx.fillStyle = COLORS.porcelain;
+  ctx.strokeStyle = COLORS.iron;
+  ctx.lineWidth = 3;
+  ellipse(ctx, elbow, 15, 12);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#17130f";
+  ctx.fillRect(ground.x - 18, ground.y - 7, 36, 14);
   ctx.restore();
 }
 
-function drawMemorySlots(ctx, state, bossBase, now) {
-  const filled = state.memory.slice(-3);
-  const combining = state.phase === PHASE.COMBINE;
+function drawFurnaceBody(ctx, state, base, tilt, now, pile) {
+  const coreOpen = state.boss.coreOpen;
   ctx.save();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "800 15px system-ui, sans-serif";
-  for (let index = 0; index < 3; index += 1) {
-    const x = bossBase.x + (index - 1) * 38;
-    const y = bossBase.y - 151 - Math.abs(index - 1) * 6;
-    const side = filled[index];
-    ctx.beginPath();
-    ctx.moveTo(x, y - 15);
-    ctx.lineTo(x + 14, y - 4);
-    ctx.lineTo(x + 10, y + 14);
-    ctx.lineTo(x - 10, y + 14);
-    ctx.lineTo(x - 14, y - 4);
-    ctx.closePath();
-    ctx.fillStyle = side
-      ? combining
-        ? `rgba(240,68,189,${0.62 + Math.sin(now * 18 + index) * 0.18})`
-        : "rgba(56,239,240,.62)"
-      : "rgba(3,7,12,.82)";
+  ctx.translate(base.x, base.y - 59);
+  ctx.rotate(tilt);
+
+  ctx.fillStyle = "rgba(0,0,0,.48)";
+  ellipse(ctx, { x: 0, y: 65 }, 94, 30);
+  ctx.fill();
+
+  ctx.fillStyle = COLORS.iron;
+  ctx.strokeStyle = COLORS.ironEdge;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(-90, -55);
+  ctx.lineTo(-62, -105);
+  ctx.lineTo(55, -107);
+  ctx.lineTo(92, -54);
+  ctx.lineTo(80, 42);
+  ctx.lineTo(42, 67);
+  ctx.lineTo(-72, 55);
+  ctx.lineTo(-98, 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = COLORS.porcelain;
+  ctx.strokeStyle = "#4b3c31";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(-78, -46);
+  ctx.lineTo(-52, -89);
+  ctx.lineTo(-20, -84);
+  ctx.lineTo(-35, 48);
+  ctx.lineTo(-68, 40);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(27, -88);
+  ctx.lineTo(57, -82);
+  ctx.lineTo(78, -43);
+  ctx.lineTo(65, 39);
+  ctx.lineTo(34, 47);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(70,49,35,.75)";
+  ctx.lineWidth = 2;
+  lines(ctx, [
+    [{ x: -61, y: -45 }, { x: -33, y: -15 }],
+    [{ x: -64, y: -4 }, { x: -34, y: 20 }],
+    [{ x: 32, y: -50 }, { x: 64, y: -18 }],
+    [{ x: 32, y: 7 }, { x: 63, y: 27 }],
+  ]);
+  ctx.stroke();
+
+  const shutterY = -12;
+  ctx.fillStyle = "#100d0b";
+  roundedRect(ctx, -40, shutterY - 31, 80, 66, 6);
+  ctx.fill();
+  ctx.strokeStyle = COLORS.brass;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  if (coreOpen) {
+    const glow = ctx.createRadialGradient(0, shutterY + 1, 3, 0, shutterY + 1, 48);
+    glow.addColorStop(0, "rgba(255,241,198,.96)");
+    glow.addColorStop(0.34, "rgba(242,175,82,.78)");
+    glow.addColorStop(1, "rgba(177,66,29,0)");
+    ctx.fillStyle = glow;
+    ellipse(ctx, { x: 0, y: shutterY + 1 }, 45, 42);
     ctx.fill();
-    ctx.strokeStyle = side ? (combining ? COLORS.magenta : COLORS.cyan) : "rgba(190,220,224,.27)";
-    ctx.lineWidth = side ? 2.5 : 1.5;
+    ctx.fillStyle = "#33170e";
+    roundedRect(ctx, -26, shutterY - 20, 52, 42, 4);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.brickLight;
+    ctx.lineWidth = 3;
     ctx.stroke();
-    if (side) {
-      ctx.fillStyle = COLORS.platinum;
-      ctx.fillText(side === "left" ? "‹" : "›", x, y - 1);
-    }
+    ctx.fillStyle = COLORS.fire;
+    ctx.fillRect(-10, shutterY - 8, 20, 23 + Math.sin(now * 18) * 4);
+    ctx.fillStyle = COLORS.heat;
+    ctx.fillRect(-18, shutterY + 6, 36, 12);
+    ctx.fillStyle = COLORS.porcelain;
+    ctx.strokeStyle = COLORS.iron;
+    ctx.lineWidth = 3;
+    ctx.save();
+    ctx.rotate(-0.66);
+    roundedRect(ctx, -83, shutterY - 19, 34, 42, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.rotate(0.66);
+    roundedRect(ctx, 49, shutterY - 19, 34, 42, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    ctx.fillStyle = COLORS.porcelain;
+    roundedRect(ctx, -33, shutterY - 24, 66, 52, 5);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.ironEdge;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(69,49,36,.88)";
+    ctx.lineWidth = 3;
+    lines(ctx, [
+      [{ x: -26, y: shutterY - 16 }, { x: 25, y: shutterY + 18 }],
+      [{ x: 26, y: shutterY - 16 }, { x: -25, y: shutterY + 18 }],
+    ]);
+    ctx.stroke();
   }
-  ctx.fillStyle = "rgba(211,232,234,.7)";
-  ctx.font = "700 10px system-ui, sans-serif";
-  ctx.letterSpacing = "0.12em";
-  ctx.fillText("MEMORY", bossBase.x, bossBase.y - 185);
+
+  const linkEnd = pile?.end || { x: base.x + 120, y: base.y + 15 };
   ctx.restore();
+
+  if (coreOpen) {
+    const chest = { x: base.x + Math.cos(tilt) * 20, y: base.y - 62 };
+    ctx.save();
+    ctx.strokeStyle = COLORS.brassLight;
+    ctx.lineWidth = 5;
+    ctx.lineCap = "round";
+    line(ctx, { x: chest.x + 35, y: chest.y + 4 }, { x: linkEnd.x - 12, y: linkEnd.y - 10 });
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(35,22,15,.9)";
+    ctx.lineWidth = 1.5;
+    line(ctx, { x: chest.x + 35, y: chest.y + 4 }, { x: linkEnd.x - 12, y: linkEnd.y - 10 });
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawBoss(ctx, state, now) {
   const base = projectWorld(state.boss);
-  const targetPoint = state.lock
+  // The small stabilizer reads exploration lanes. The heavy pile-driver remains
+  // visibly stowed until LOCK commits it to a fixed plate, keeping the player
+  // and the live floor warning unobscured during sampling.
+  const target = state.lock
     ? projectWorld(state.lock.zone)
-    : state.explore
-      ? projectWorld({ x: state.explore.lineX, y: state.player.y })
-      : projectWorld(state.player);
+    : projectWorld({ x: state.boss.x + 154, y: state.boss.y + 116 });
   const locked = Boolean(state.lock);
+  const resolved = state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR;
+  const direction = target.x >= base.x ? 1 : -1;
+  // A miss is not a generic glow state: the pile-driver stays buried while its
+  // overextension drags the low furnace body sideways and pulls its shutters.
+  const tilt = resolved ? direction * 0.27 : locked ? direction * 0.035 : 0;
+  const shake = state.visual.shake ? Math.sin(now * 85) * state.visual.shake * 14 : 0;
+  const bodyBase = {
+    x: base.x + shake + (resolved ? direction * 29 : 0),
+    y: base.y + (resolved ? 27 : 0),
+  };
+  const shoulder = { x: bodyBase.x + direction * 58, y: bodyBase.y - 112 };
+  const braceStart = { x: bodyBase.x - direction * 60, y: bodyBase.y - 82 };
+  const braceGround = { x: bodyBase.x - direction * 132, y: bodyBase.y + 30 };
 
   ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,.55)";
-  ctx.beginPath();
-  ctx.ellipse(base.x, base.y + 8, 105, 32, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,.56)";
+  ellipse(ctx, { x: bodyBase.x, y: bodyBase.y + 29 }, 130, 39);
   ctx.fill();
   ctx.restore();
 
-  drawArm(ctx, { x: base.x - 55, y: base.y - 90 }, targetPoint, locked);
-  drawArm(ctx, { x: base.x + 55, y: base.y - 90 }, targetPoint, locked);
+  drawBraceArm(ctx, braceStart, braceGround);
+  const pile = drawPileDriver(ctx, shoulder, target, resolved, state.visual.shake || 0);
+  drawFurnaceBody(ctx, state, bodyBase, tilt, now, pile);
+  drawMemoryRack(ctx, state, bodyBase, now);
 
+  const sight = { x: bodyBase.x + direction * 23, y: bodyBase.y - 145 };
   ctx.save();
-  const armorGradient = ctx.createLinearGradient(base.x - 100, base.y - 165, base.x + 90, base.y);
-  armorGradient.addColorStop(0, "#25313d");
-  armorGradient.addColorStop(0.45, "#0a1018");
-  armorGradient.addColorStop(1, "#18222c");
-  ctx.fillStyle = armorGradient;
-  ctx.strokeStyle = locked ? "rgba(240,68,189,.55)" : "rgba(202,232,235,.24)";
+  ctx.fillStyle = "#17120f";
+  ctx.strokeStyle = COLORS.brassLight;
   ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(base.x, base.y - 172);
-  ctx.lineTo(base.x + 78, base.y - 124);
-  ctx.lineTo(base.x + 92, base.y - 40);
-  ctx.lineTo(base.x + 54, base.y + 2);
-  ctx.lineTo(base.x - 54, base.y + 2);
-  ctx.lineTo(base.x - 92, base.y - 40);
-  ctx.lineTo(base.x - 78, base.y - 124);
-  ctx.closePath();
+  roundedRect(ctx, sight.x - 15, sight.y - 10, 30, 20, 5);
   ctx.fill();
   ctx.stroke();
-
-  ctx.fillStyle = "#05080e";
-  ctx.strokeStyle = locked ? COLORS.magenta : COLORS.orange;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(base.x - 43, base.y - 130);
-  ctx.lineTo(base.x + 43, base.y - 130);
-  ctx.lineTo(base.x + 29, base.y - 105);
-  ctx.lineTo(base.x - 29, base.y - 105);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  const eyeDirection = Math.sign(targetPoint.x - base.x) * 5;
-  ctx.fillStyle = locked ? COLORS.magenta : COLORS.orange;
-  ctx.shadowColor = ctx.fillStyle;
-  ctx.shadowBlur = 14;
-  ctx.fillRect(base.x - 17 + eyeDirection, base.y - 121, 34, 5);
-  ctx.shadowBlur = 0;
-
-  const coreY = base.y - 68;
-  if (state.boss.coreOpen) {
-    const coreGlow = ctx.createRadialGradient(base.x, coreY, 2, base.x, coreY, 44);
-    coreGlow.addColorStop(0, "rgba(255,255,235,1)");
-    coreGlow.addColorStop(0.28, "rgba(255,214,107,.95)");
-    coreGlow.addColorStop(1, "rgba(255,214,107,0)");
-    ctx.fillStyle = coreGlow;
-    ctx.beginPath();
-    ctx.arc(base.x, coreY, 44 + Math.sin(now * 14) * 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = COLORS.platinum;
-    ctx.beginPath();
-    ctx.moveTo(base.x, coreY - 25);
-    ctx.lineTo(base.x + 22, coreY);
-    ctx.lineTo(base.x, coreY + 25);
-    ctx.lineTo(base.x - 22, coreY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = COLORS.gold;
-    ctx.lineWidth = 4;
+  if (locked) {
+    ctx.strokeStyle = COLORS.rustBright;
+    ctx.lineWidth = 2.5;
+    line(ctx, sight, target);
     ctx.stroke();
-    ctx.strokeStyle = "rgba(255,214,107,.85)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(base.x - 76, coreY - 25);
-    ctx.lineTo(base.x - 34, coreY);
-    ctx.moveTo(base.x + 76, coreY - 25);
-    ctx.lineTo(base.x + 34, coreY);
-    ctx.stroke();
-  } else {
-    ctx.fillStyle = "#070b11";
-    ctx.strokeStyle = "rgba(193,222,225,.25)";
-    ctx.lineWidth = 2;
-    roundedRect(ctx, base.x - 38, coreY - 24, 76, 48, 8);
-    ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(base.x - 30, coreY - 12);
-    ctx.lineTo(base.x + 30, coreY + 12);
-    ctx.moveTo(base.x + 30, coreY - 12);
-    ctx.lineTo(base.x - 30, coreY + 12);
+    ctx.strokeStyle = "rgba(224,186,117,.66)";
+    ctx.lineWidth = 1;
+    line(ctx, { x: sight.x + direction * 4, y: sight.y + 4 }, { x: target.x, y: target.y });
     ctx.stroke();
   }
   ctx.restore();
-
-  drawMemorySlots(ctx, state, base, now);
 }
 
 function drawPlayer(ctx, state, now) {
-  const p = projectWorld(state.player);
-  const invulnerable = state.timers.invulnerable > 0;
-  const blink = invulnerable && Math.sin(now * 42) > 0.3;
+  const point = projectWorld(state.player);
   const boss = projectWorld(state.boss);
-  const angle = Math.atan2(boss.y - p.y, boss.x - p.x);
+  const angle = Math.atan2(boss.y - point.y, boss.x - point.x);
+  const blinking = state.timers.invulnerable > 0 && Math.sin(now * 40) > 0.2;
 
   ctx.save();
-  ctx.globalAlpha = blink ? 0.48 : 1;
-  ctx.fillStyle = "rgba(0,0,0,.62)";
-  ctx.beginPath();
-  ctx.ellipse(p.x, p.y + 3, 25, 9, 0, 0, Math.PI * 2);
+  ctx.globalAlpha = blinking ? 0.45 : 1;
+  ctx.fillStyle = "rgba(0,0,0,.58)";
+  ellipse(ctx, { x: point.x, y: point.y + 4 }, 20, 7);
   ctx.fill();
-
-  // The ground point is the exact position used by every hazard check.
-  ctx.strokeStyle = COLORS.cyan;
-  ctx.fillStyle = COLORS.cyanPale;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+  ctx.fillStyle = COLORS.enamelLight;
+  ellipse(ctx, point, 5, 3);
   ctx.fill();
+  ctx.strokeStyle = COLORS.enamel;
+  ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  ctx.translate(p.x, p.y);
-  ctx.fillStyle = "#eafafb";
-  ctx.strokeStyle = COLORS.cyan;
+  ctx.translate(point.x, point.y);
+  ctx.fillStyle = "#2b2924";
+  ctx.strokeStyle = "#13110e";
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(0, -54);
-  ctx.lineTo(17, -33);
-  ctx.lineTo(12, -5);
-  ctx.lineTo(-12, -5);
-  ctx.lineTo(-17, -33);
+  ctx.moveTo(-13, -8);
+  ctx.lineTo(-10, -39);
+  ctx.lineTo(0, -52);
+  ctx.lineTo(12, -38);
+  ctx.lineTo(14, -8);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = "#091017";
+  ctx.fillStyle = COLORS.porcelainLight;
   ctx.beginPath();
-  ctx.arc(0, -61, 10, 0, Math.PI * 2);
+  ctx.moveTo(-6, -39);
+  ctx.lineTo(0, -49);
+  ctx.lineTo(6, -39);
+  ctx.lineTo(4, -28);
+  ctx.lineTo(-4, -28);
+  ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = COLORS.cyan;
-  ctx.beginPath();
-  ctx.moveTo(-6, -61);
-  ctx.lineTo(7, -61);
-  ctx.stroke();
+  ctx.fillStyle = COLORS.enamel;
+  ctx.fillRect(-13, -28, 8, 18);
   ctx.restore();
 
   ctx.save();
-  ctx.translate(p.x, p.y - 28);
+  ctx.translate(point.x, point.y - 29);
   ctx.rotate(angle);
-  ctx.strokeStyle = COLORS.cyanPale;
-  ctx.shadowColor = COLORS.cyan;
-  ctx.shadowBlur = 12;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(7, 0);
-  ctx.lineTo(42, 0);
+  ctx.strokeStyle = "#e8e0d0";
+  ctx.lineWidth = 3.5;
+  line(ctx, { x: 4, y: 0 }, { x: 43, y: 0 });
+  ctx.stroke();
+  ctx.strokeStyle = COLORS.brassLight;
+  ctx.lineWidth = 2;
+  line(ctx, { x: 9, y: -7 }, { x: 9, y: 7 });
   ctx.stroke();
   ctx.restore();
 
   if (state.visual.attack) {
-    const attackAlpha = Math.max(0, Math.min(1, state.visual.attack.remaining / 0.24));
+    const alpha = clamp(state.visual.attack.remaining / 0.24, 0, 1);
     ctx.save();
-    ctx.translate(p.x, p.y - 25);
+    ctx.globalAlpha = alpha;
+    ctx.translate(point.x, point.y - 28);
     ctx.rotate(angle);
-    ctx.strokeStyle = state.visual.attack.hit ? COLORS.platinum : COLORS.cyan;
-    ctx.shadowColor = state.visual.attack.hit ? COLORS.gold : COLORS.cyan;
-    ctx.shadowBlur = 18;
-    ctx.globalAlpha = attackAlpha;
-    ctx.lineWidth = 8;
+    ctx.strokeStyle = state.visual.attack.hit ? COLORS.fire : COLORS.white;
+    ctx.lineWidth = state.visual.attack.hit ? 5 : 3;
     ctx.beginPath();
-    ctx.arc(10, 0, 55, -0.72, 0.72);
+    ctx.arc(13, 0, 51, -0.68, 0.68);
     ctx.stroke();
     ctx.restore();
   }
@@ -682,355 +730,95 @@ function drawPlayer(ctx, state, now) {
 function drawImpact(ctx, state, now) {
   const impact = state.visual.impact;
   if (!impact) return;
-  const p = projectWorld(impact);
-  const color = impact.tone === "core" ? COLORS.gold : impact.tone === "armor" ? COLORS.cyan : COLORS.danger;
-  const progress = 1 - Math.max(0, impact.remaining) / 0.38;
-  const radius = 12 + progress * 42;
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 20;
-  ctx.globalAlpha = Math.max(0, 1 - progress);
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y - (impact.tone === "core" ? 55 : 15), radius, 0, Math.PI * 2);
-  ctx.stroke();
-  for (let i = 0; i < 6; i += 1) {
-    const angle = (Math.PI * 2 * i) / 6 + now;
-    ctx.fillRect(
-      p.x + Math.cos(angle) * radius - 2,
-      p.y - 20 + Math.sin(angle) * radius - 2,
-      4,
-      4,
-    );
-  }
-  ctx.restore();
-}
-
-function drawCellBar(ctx, x, y, count, filled, color, label, align = "left") {
-  const cellWidth = 30;
-  const gap = 6;
-  const width = count * cellWidth + (count - 1) * gap;
-  const startX = align === "center" ? x - width / 2 : x;
-  ctx.save();
-  ctx.fillStyle = COLORS.muted;
-  ctx.font = "700 11px system-ui, sans-serif";
-  ctx.textAlign = align === "center" ? "center" : "left";
-  ctx.fillText(label, align === "center" ? x : startX, y - 9);
-  for (let index = 0; index < count; index += 1) {
-    const cellX = startX + index * (cellWidth + gap);
-    roundedRect(ctx, cellX, y, cellWidth, 11, 3);
-    ctx.fillStyle = index < filled ? color : "rgba(199,232,235,.1)";
-    ctx.fill();
-    ctx.strokeStyle = index < filled ? "rgba(247,244,223,.72)" : "rgba(199,232,235,.25)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function formatTime(seconds) {
-  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-  const minutes = Math.floor(safe / 60);
-  const remainder = (safe % 60).toFixed(1).padStart(4, "0");
-  return `${String(minutes).padStart(2, "0")}:${remainder}`;
-}
-
-function drawHud(ctx, state) {
-  drawPanel(ctx, 28, 24, 230, 76, "rgba(56,239,240,.24)");
-  drawCellBar(ctx, 48, 61, CONFIG.playerMaxShield, state.player.shield, COLORS.cyan, "PLAYER SHIELD");
-
-  drawPanel(ctx, 480, 18, 320, 88, "rgba(255,214,107,.22)");
-  drawCellBar(
-    ctx,
-    VIEW.centerX,
-    58,
-    CONFIG.bossMaxCore,
-    state.boss.coreHp,
-    state.boss.coreOpen ? COLORS.gold : COLORS.platinum,
-    state.boss.coreOpen ? "CORE EXPOSED — 직접 공격" : "AI CORE / ARMORED",
-    "center",
-  );
-
-  drawPanel(ctx, 1008, 24, 244, 92, "rgba(240,68,189,.22)");
-  ctx.save();
-  ctx.textAlign = "right";
-  ctx.fillStyle = COLORS.text;
-  ctx.font = "800 20px system-ui, sans-serif";
-  ctx.fillText(`ROUND ${state.round}`, 1230, 53);
-  ctx.font = "700 15px ui-monospace, monospace";
-  ctx.fillStyle = COLORS.cyanPale;
-  ctx.fillText(`${String(state.stats.score).padStart(5, "0")} PTS`, 1230, 78);
-  ctx.fillStyle = COLORS.muted;
-  ctx.font = "650 12px system-ui, sans-serif";
-  ctx.fillText(`${formatTime(state.elapsed)}  ·  OUTSMART ${state.stats.outsmarts}`, 1230, 99);
-  ctx.restore();
-}
-
-function phasePrompt(state) {
-  switch (state.phase) {
-    case PHASE.ENGAGE:
-      return "주황 위험 구역 밖이면 회피 · WASD / 대시 모두 가능";
-    case PHASE.EXPLORE:
-      return "탐색 베기 · 주황 구역 밖으로 피한 측면을 AI가 기억한다";
-    case PHASE.EXPLORE_RECOVER:
-      return "AI가 다음 표본을 찾는다";
-    case PHASE.COMBINE:
-      return "세 기억이 하나의 미래로 결합된다";
-    case PHASE.LOCK:
-    case PHASE.RELOCK:
-      return "LOCK · 자홍 위험 구역은 고정됐다 · 밖으로 피하라";
-    case PHASE.PREDICTION:
-      return "자홍 구역 밖이면 무피격 · 반대편이면 OUTSMART";
-    case PHASE.CORE_OPEN:
-      return state.phaseTime <= 0.6
-        ? "장갑 복귀 · 지금 이탈!"
-        : "코어 노출 · 가까이서 직접 공격!";
-    case PHASE.ROUND_CLEAR:
-      return "AI가 새 장갑을 재구성한다";
-    default:
-      return "";
-  }
-}
-
-function drawPrompt(ctx, state) {
-  const text = phasePrompt(state);
-  if (!text || state.phase === PHASE.GAME_OVER) return;
-  ctx.save();
-  ctx.font = "750 14px system-ui, sans-serif";
-  const width = Math.min(560, ctx.measureText(text).width + 52);
-  drawPanel(ctx, VIEW.centerX - width / 2, 659, width, 38, "rgba(199,232,235,.2)");
-  ctx.fillStyle = COLORS.text;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, VIEW.centerX, 678);
-  ctx.restore();
-}
-
-function drawBanner(ctx, state) {
-  const banner = state.visual.banner;
-  if (!banner || state.phase === PHASE.GAME_OVER) return;
-  const toneColor =
-    banner.tone === "success"
-      ? COLORS.platinum
-      : banner.tone === "danger"
-        ? COLORS.danger
-        : banner.tone === "lock" || banner.tone === "prediction"
-          ? COLORS.magenta
-          : COLORS.cyanPale;
-  const alpha = Math.min(1, Math.max(0, banner.remaining * 4));
+  const point = projectWorld(impact);
+  const alpha = clamp(impact.remaining / (impact.tone === "core" ? 0.3 : 0.24), 0, 1);
+  const color = impact.tone === "core" ? COLORS.fire : impact.tone === "armor" ? COLORS.porcelainLight : COLORS.rustBright;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.textAlign = "center";
-  ctx.fillStyle = toneColor;
-  ctx.shadowColor = toneColor;
-  ctx.shadowBlur = 18;
-  ctx.font = "900 36px system-ui, sans-serif";
-  ctx.fillText(banner.text, VIEW.centerX, 150);
-  ctx.shadowBlur = 0;
-  if (banner.subtext) {
-    ctx.fillStyle = COLORS.text;
-    ctx.font = "650 14px system-ui, sans-serif";
-    ctx.fillText(banner.subtext, VIEW.centerX, 177);
-  }
-  ctx.restore();
-}
-
-function drawEventToast(ctx, toast) {
-  if (!toast) return;
-  const color =
-    toast.tone === "danger"
-      ? COLORS.danger
-      : toast.tone === "success"
-        ? COLORS.platinum
-        : toast.tone === "armor"
-          ? COLORS.cyan
-          : COLORS.magenta;
-  ctx.save();
-  ctx.globalAlpha = toast.alpha;
-  roundedRect(ctx, VIEW.centerX - 205, 121, 410, toast.subtext ? 68 : 52, 10);
-  ctx.fillStyle = "rgba(3,6,10,.86)";
-  ctx.fill();
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 3;
+  const radius = 14 + (1 - alpha) * 44;
+  ellipse(ctx, { x: point.x, y: point.y - 42 }, radius, radius * 0.54);
   ctx.stroke();
-  ctx.textAlign = "center";
   ctx.fillStyle = color;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 14;
-  ctx.font = "900 27px system-ui, sans-serif";
-  ctx.fillText(toast.text, VIEW.centerX, 154);
-  ctx.shadowBlur = 0;
-  if (toast.subtext) {
-    ctx.fillStyle = COLORS.text;
-    ctx.font = "650 12px system-ui, sans-serif";
-    ctx.fillText(toast.subtext, VIEW.centerX, 177);
+  for (let index = 0; index < 5; index += 1) {
+    const angle = now * 5 + (Math.PI * 2 * index) / 5;
+    ctx.fillRect(point.x + Math.cos(angle) * radius - 2, point.y - 38 + Math.sin(angle) * radius * 0.45 - 2, 4, 4);
   }
   ctx.restore();
 }
 
-function deathTitle(death) {
-  if (!death) return "분석 완료";
-  if (death.kind === "read") return "당신의 습관을 읽혔다";
-  if (death.kind === "greed") return "한 번 더가 패배가 됐다";
-  return `${death.attackName || "공격"}에 쓰러졌다`;
-}
-
-function drawDeathMemory(ctx, state, x, y) {
-  const memory = state.death?.memory ?? [];
+function drawCoreClosureWarning(ctx, state) {
+  if (state.phase !== PHASE.CORE_OPEN || state.phaseTime > 0.6) return;
+  const point = projectWorld(state.boss);
+  const progress = 1 - clamp(state.phaseTime / 0.6, 0, 1);
   ctx.save();
-  ctx.textAlign = "center";
-  ctx.font = "800 18px system-ui, sans-serif";
-  for (let index = 0; index < 3; index += 1) {
-    const side = memory[index];
-    const cellX = x + index * 54;
-    roundedRect(ctx, cellX, y, 44, 40, 8);
-    ctx.fillStyle = side ? "rgba(56,239,240,.18)" : "rgba(199,232,235,.05)";
-    ctx.fill();
-    ctx.strokeStyle = side ? COLORS.cyan : "rgba(199,232,235,.18)";
-    ctx.stroke();
-    if (side) {
-      ctx.fillStyle = COLORS.cyanPale;
-      ctx.fillText(side === "left" ? "←" : "→", cellX + 22, y + 21);
-    }
-  }
-  ctx.restore();
-}
-
-function drawGameOver(ctx, state, best = null) {
-  const readDeath = state.death?.kind === "read";
-  ctx.save();
-  ctx.fillStyle = "rgba(2,4,8,.73)";
-  ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  drawPanel(ctx, 330, 138, 620, 470, "rgba(255,93,98,.48)");
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = COLORS.danger;
-  ctx.font = "900 17px system-ui, sans-serif";
-  ctx.fillText("ANALYSIS COMPLETE", VIEW.centerX, 180);
-  ctx.fillStyle = COLORS.platinum;
-  ctx.font = "900 34px system-ui, sans-serif";
-  ctx.fillText(deathTitle(state.death), VIEW.centerX, 226);
-
-  const predicted = state.death?.predictedSide;
-  const actual = state.death?.actualSide;
-  if (readDeath) {
-    ctx.fillStyle = COLORS.muted;
-    ctx.font = "650 13px system-ui, sans-serif";
-    ctx.fillText("AI가 기억한 세 번의 회피 방향", VIEW.centerX, 264);
-    drawDeathMemory(ctx, state, VIEW.centerX - 76, 279);
-    ctx.font = "700 14px system-ui, sans-serif";
-    ctx.fillStyle = COLORS.text;
-    ctx.fillText(
-      `예측 ${SIDE_LABEL[predicted] || "-"}${actual ? `  ·  실제 ${SIDE_LABEL[actual]}` : ""}`,
-      VIEW.centerX,
-      349,
-    );
-  } else {
-    ctx.fillStyle = COLORS.muted;
-    ctx.font = "750 12px system-ui, sans-serif";
-    ctx.fillText("치명타 충돌 근거", VIEW.centerX, 275);
-    ctx.fillStyle = COLORS.orange;
-    ctx.font = "850 22px system-ui, sans-serif";
-    ctx.fillText(state.death?.attackName || "전장 공격", VIEW.centerX, 310);
-    ctx.fillStyle = COLORS.text;
-    ctx.font = "650 13px system-ui, sans-serif";
-    ctx.fillText(
-      state.death?.kind === "greed"
-        ? "코어가 닫힐 때 장갑 복귀 충격 범위 안에 남아 있었다"
-        : "바닥에 표시된 위험 범위와 실제 플레이어 위치가 겹쳤다",
-      VIEW.centerX,
-      343,
-    );
-  }
-
-  roundedRect(ctx, 390, 371, 500, 66, 10);
-  ctx.fillStyle = "rgba(240,68,189,.1)";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(240,68,189,.42)";
+  ctx.strokeStyle = `rgba(197,92,50,${0.45 + progress * 0.35})`;
+  ctx.lineWidth = 3 + progress * 2;
+  ctx.setLineDash([11, 8]);
+  ellipse(ctx, point, CONFIG.armorShockRadius * VIEW.scaleX, CONFIG.armorShockRadius * VIEW.scaleY);
   ctx.stroke();
-  ctx.fillStyle = COLORS.magenta;
-  ctx.font = "800 12px system-ui, sans-serif";
-  ctx.fillText("다음 판에 바꿀 한 가지", VIEW.centerX, 396);
-  ctx.fillStyle = COLORS.platinum;
-  ctx.font = "800 17px system-ui, sans-serif";
-  ctx.fillText(state.death?.tip || "경고 구역 밖으로 이동", VIEW.centerX, 421);
+  ctx.setLineDash([]);
+  ctx.restore();
+}
 
-  ctx.fillStyle = COLORS.text;
-  ctx.font = "750 13px ui-monospace, monospace";
-  ctx.fillText(
-    `도달 ROUND ${state.round}  ·  CORE ${state.boss.coreHp}/${CONFIG.bossMaxCore}  ·  ${state.stats.score} PTS  ·  ${formatTime(state.elapsed)}  ·  OUTSMART ${state.stats.outsmarts}`,
-    VIEW.centerX,
-    473,
-  );
-  if (best) {
-    ctx.fillStyle = COLORS.muted;
-    ctx.font = "650 12px system-ui, sans-serif";
-    ctx.fillText(
-      `최고 기록  R${best.currentRound || 1} · ${best.score || 0}점 · ${best.outsmarts || 0}회 속임`,
-      VIEW.centerX,
-      500,
-    );
-  }
-
-  const remaining = Math.max(0, CONFIG.restartDelay - state.gameOverElapsed);
-  if (remaining > 0) {
-    ctx.fillStyle = COLORS.muted;
-    ctx.font = "750 15px system-ui, sans-serif";
-    ctx.fillText(`재시작 준비 ${remaining.toFixed(1)}초`, VIEW.centerX, 554);
-  } else {
-    roundedRect(ctx, 433, 526, 414, 55, 10);
-    ctx.fillStyle = COLORS.cyan;
-    ctx.fill();
-    ctx.fillStyle = "#031011";
-    ctx.font = "900 17px system-ui, sans-serif";
-    ctx.fillText("ENTER / SPACE · 다시 속이기", VIEW.centerX, 554);
+function drawMinimalGameOver(ctx, state) {
+  const alpha = 0.62;
+  ctx.save();
+  ctx.fillStyle = `rgba(8,6,5,${alpha})`;
+  ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+  const target = state.lock ? projectWorld(state.lock.zone) : projectWorld(state.player);
+  const player = projectWorld(state.player);
+  ctx.strokeStyle = COLORS.rustBright;
+  ctx.lineWidth = 3;
+  ellipse(ctx, target, 76, 46);
+  ctx.stroke();
+  ctx.strokeStyle = COLORS.enamelLight;
+  ctx.lineWidth = 3;
+  ellipse(ctx, player, 16, 8);
+  ctx.stroke();
+  ctx.fillStyle = COLORS.white;
+  ctx.textAlign = "center";
+  ctx.font = "700 16px system-ui, sans-serif";
+  ctx.fillText(state.death?.tip || "다음에는 위험 구역 밖으로 이동", VIEW.centerX, 618);
+  if (state.gameOverElapsed >= CONFIG.restartDelay) {
+    ctx.fillStyle = COLORS.enamelLight;
+    ctx.font = "800 14px system-ui, sans-serif";
+    ctx.fillText("ENTER / SPACE · 다시 속이기", VIEW.centerX, 650);
   }
   ctx.restore();
 }
 
-function drawWaitingScene(ctx, now) {
-  const stateLike = {
-    player: { x: CONFIG.playerStartX, y: CONFIG.playerStartY },
+function waitingState() {
+  return {
+    phase: PHASE.WAITING,
+    phaseTime: 0,
+    player: { x: CONFIG.playerStartX, y: CONFIG.playerStartY, lastMove: { x: 0, y: -1 } },
     boss: { x: CONFIG.bossX, y: CONFIG.bossY, coreOpen: false },
     memory: [],
-    phase: PHASE.WAITING,
     lock: null,
     explore: null,
     timers: { invulnerable: 0 },
-    visual: { attack: null },
+    visual: { lastDash: null, attack: null, impact: null, shake: 0 },
   };
-  drawBoss(ctx, stateLike, now);
-  drawPlayer(ctx, stateLike, now);
 }
 
-export function renderGame(ctx, state, { now = 0, best = null, eventToast = null } = {}) {
+export function renderGame(ctx, state, { now = 0 } = {}) {
   ctx.save();
   ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  ctx.fillStyle = COLORS.ink;
+  ctx.fillStyle = COLORS.deepSoot;
   ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
   drawArena(ctx, now);
 
-  if (state.phase === PHASE.WAITING) {
-    drawWaitingScene(ctx, now);
-    ctx.restore();
-    return;
-  }
-
-  drawExploreWarning(ctx, state, now);
-  drawArmorShockWarning(ctx, state, now);
-  drawLockPrediction(ctx, state, now);
-  drawDashTrail(ctx, state);
-  drawEscapeMarker(ctx, state);
-  drawBoss(ctx, state, now);
-  drawPlayer(ctx, state, now);
-  drawImpact(ctx, state, now);
-  drawHud(ctx, state);
-  drawPrompt(ctx, state);
-  if (eventToast) drawEventToast(ctx, eventToast);
-  else drawBanner(ctx, state);
-  if (state.phase === PHASE.GAME_OVER) drawGameOver(ctx, state, best);
+  const scene = state.phase === PHASE.WAITING ? waitingState() : state;
+  drawExploreWarning(ctx, scene);
+  drawKilnTarget(ctx, scene, now);
+  drawDashSkid(ctx, scene);
+  drawCoreClosureWarning(ctx, scene);
+  drawBoss(ctx, scene, now);
+  drawPlayer(ctx, scene, now);
+  drawImpact(ctx, scene, now);
+  if (state.phase === PHASE.GAME_OVER) drawMinimalGameOver(ctx, state);
   ctx.restore();
 }
 
@@ -1040,88 +828,6 @@ export function createRenderer(canvas) {
   }
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context is unavailable");
-  const seenEvents = new Set();
-  let activeToast = null;
-
-  function toastForEvents(events, now) {
-    let selected = null;
-    const options = {
-      remember: (event) => ({
-        priority: 20,
-        text: `REMEMBER ${event.memory?.length || 0}/3`,
-        subtext: `${SIDE_LABEL[event.side] || "측면"} 회피가 보스의 기억 조각으로 접혔다`,
-        tone: "memory",
-      }),
-      prediction_neutral: () => ({
-        priority: 65,
-        text: "EVADE",
-        subtext: "위험 구역 밖 · 무피격 · AI가 다시 관찰한다",
-        tone: "success",
-      }),
-      evade_unlearned: () => ({
-        priority: 65,
-        text: "EVADE",
-        subtext: "가장자리 강제 회피 · AI는 기억하지 않음",
-        tone: "success",
-      }),
-      armor_hit: () => ({
-        priority: 35,
-        text: "ARMORED · 피해 0",
-        subtext: "닫힌 장갑에는 코어 피해가 들어가지 않는다",
-        tone: "armor",
-      }),
-      core_hit: (event) => ({
-        priority: 45,
-        text: "CORE -1",
-        subtext: `직접 타격 · 남은 코어 ${event.hp}/${CONFIG.bossMaxCore}`,
-        tone: "success",
-      }),
-      player_hit: (event) => ({
-        priority: 55,
-        text: "SHIELD -1",
-        subtext: `남은 보호막 ${event.shield}/${CONFIG.playerMaxShield}`,
-        tone: "danger",
-      }),
-      outsmart: () => ({
-        priority: 90,
-        text: "OUTSMART",
-        subtext: "AI가 빈 예측을 내려쳤다 · 열린 코어를 직접 베어라",
-        tone: "success",
-      }),
-      read: (event) => ({
-        priority: 100,
-        text: "READ",
-        subtext: `예측과 실제가 모두 ${SIDE_LABEL[event.side] || "같은 측면"}이었다`,
-        tone: "danger",
-      }),
-      round_clear: (event) => ({
-        priority: 95,
-        text: `ROUND ${event.round} CLEAR`,
-        subtext: "AI가 더 빠른 장갑으로 재구성된다",
-        tone: "success",
-      }),
-    };
-
-    for (const event of events || []) {
-      const key = `${event.id}:${event.type}`;
-      if (seenEvents.has(key)) continue;
-      seenEvents.add(key);
-      const makeToast = options[event.type];
-      if (!makeToast) continue;
-      const candidate = makeToast(event);
-      if (!selected || candidate.priority >= selected.priority) selected = candidate;
-    }
-    if (seenEvents.size > 300) seenEvents.clear();
-    if (selected) activeToast = { ...selected, expiresAt: now + 0.82 };
-    if (!activeToast || now >= activeToast.expiresAt) {
-      activeToast = null;
-      return null;
-    }
-    return {
-      ...activeToast,
-      alpha: Math.min(1, Math.max(0, (activeToast.expiresAt - now) * 5)),
-    };
-  }
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -1137,9 +843,7 @@ export function createRenderer(canvas) {
   function render(state, options = {}) {
     resize();
     ctx.setTransform(canvas.width / LOGICAL_WIDTH, 0, 0, canvas.height / LOGICAL_HEIGHT, 0, 0);
-    const now = options.now || 0;
-    const eventToast = toastForEvents(state.events, now);
-    renderGame(ctx, state, { ...options, eventToast });
+    renderGame(ctx, state, options);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
