@@ -1,0 +1,271 @@
+{
+  "version": 3,
+  "sheets": {
+    "player": {
+      "file": "player-sheet.svg",
+      "width": 384,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frameCount": 6
+    },
+    "boss": {
+      "file": "boss-sheet.svg",
+      "width": 256,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frameCount": 4
+    },
+    "relics": {
+      "file": "relics.svg",
+      "width": 240,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frameCount": 5
+    }
+  },
+  "frames": {
+    "player-idle": [
+      0,
+      0
+    ],
+    "player-move": [
+      64,
+      0
+    ],
+    "player-dash": [
+      128,
+      0
+    ],
+    "player-attack-windup": [
+      192,
+      0
+    ],
+    "player-attack-contact": [
+      256,
+      0
+    ],
+    "player-attack-recoil": [
+      320,
+      0
+    ],
+    "boss-idle": [
+      0,
+      0
+    ],
+    "boss-lock": [
+      64,
+      0
+    ],
+    "boss-stamp": [
+      128,
+      0
+    ],
+    "boss-open": [
+      192,
+      0
+    ],
+    "memory-plaque": [
+      0,
+      0
+    ],
+    "lock-seal": [
+      48,
+      0
+    ],
+    "blank-core": [
+      96,
+      0
+    ],
+    "danger": [
+      144,
+      0
+    ],
+    "compass-driver": [
+      192,
+      0
+    ]
+  },
+  "sourceFrames": {
+    "player-idle": {
+      "id": "player-idle",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          31,
+          60
+        ]
+      }
+    },
+    "player-move": {
+      "id": "player-move",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          29,
+          60
+        ]
+      }
+    },
+    "player-dash": {
+      "id": "player-dash",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          34,
+          60
+        ]
+      }
+    },
+    "player-attack-windup": {
+      "id": "player-attack-windup",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          31,
+          60
+        ],
+        "hand": [
+          41,
+          33
+        ]
+      }
+    },
+    "player-attack-contact": {
+      "id": "player-attack-contact",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          30,
+          60
+        ],
+        "hand": [
+          42,
+          32
+        ]
+      }
+    },
+    "player-attack-recoil": {
+      "id": "player-attack-recoil",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          31,
+          60
+        ],
+        "hand": [
+          42,
+          35
+        ]
+      }
+    },
+    "boss-idle": {
+      "id": "boss-idle",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          32,
+          60
+        ]
+      }
+    },
+    "boss-lock": {
+      "id": "boss-lock",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          32,
+          60
+        ],
+        "driver": [
+          59,
+          32
+        ]
+      }
+    },
+    "boss-stamp": {
+      "id": "boss-stamp",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          32,
+          60
+        ],
+        "driver": [
+          59,
+          32
+        ]
+      }
+    },
+    "boss-open": {
+      "id": "boss-open",
+      "bounds": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchors": {
+        "feet": [
+          32,
+          60
+        ],
+        "driver": [
+          59,
+          32
+        ],
+        "core": [
+          34,
+          44
+        ]
+      }
+    }
+  }
+}

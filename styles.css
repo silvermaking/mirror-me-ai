@@ -1,20 +1,21 @@
 :root {
   color-scheme: dark;
-  --soot: #100d0c;
-  --porcelain: #ded1b7;
-  --rust: #b65332;
-  --enamel: #61bcb3;
+  --soot: #11141b;
+  --porcelain: #eee6cf;
+  --rust: #a9322a;
+  --enamel: #4a78cf;
   --stage-max: 1440px;
   font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { width: 100%; min-height: 100%; margin: 0; }
-body { overflow: hidden; color: var(--porcelain); background: #090706; }
+body { overflow: hidden; color: var(--porcelain); background: #0d121a; }
 button { color: inherit; font: inherit; }
 [hidden] { display: none !important; }
 
 .app-shell {
+  position: relative;
   display: grid;
   min-height: 100vh;
   min-height: 100dvh;
@@ -29,7 +30,7 @@ button { color: inherit; font: inherit; }
   max-width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: #100c0a;
+  background: #11141b;
 }
 
 #game { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
@@ -44,7 +45,7 @@ button { color: inherit; font: inherit; }
   align-content: end;
   justify-items: center;
   pointer-events: none;
-  background: linear-gradient(0deg, rgba(8, 5, 3, .56), transparent 48%);
+  background: linear-gradient(0deg, rgba(12, 17, 25, .64), transparent 48%);
   text-align: center;
 }
 
@@ -57,13 +58,13 @@ button { color: inherit; font: inherit; }
 .start-button, .mute-button, .touch-button {
   cursor: pointer;
   color: var(--porcelain);
-  background: rgba(42, 29, 20, .77);
-  border: 1px solid rgba(196, 156, 80, .56);
+  background: rgba(28, 37, 53, .77);
+  border: 1px solid rgba(238, 230, 207, .56);
   font-family: ui-sans-serif, system-ui, sans-serif;
   font-weight: 750;
 }
 .start-button { pointer-events: auto; min-height: 2.3rem; padding: .48rem .85rem; border-radius: 999px; font-size: .74rem; letter-spacing: .05em; }
-.start-button:hover, .start-button:focus-visible, .mute-button:hover, .mute-button:focus-visible, .touch-button:hover, .touch-button:focus-visible { background: rgba(91, 58, 33, .92); border-color: var(--porcelain); }
+.start-button:hover, .start-button:focus-visible, .mute-button:hover, .mute-button:focus-visible, .touch-button:hover, .touch-button:focus-visible { background: rgba(57, 76, 110, .92); border-color: var(--porcelain); }
 .start-button:active, .touch-button:active { transform: translateY(1px); }
 
 .game-over-overlay {
@@ -97,18 +98,24 @@ button { color: inherit; font: inherit; }
 .visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 button:focus-visible { outline: 3px solid var(--porcelain); outline-offset: 3px; }
 
-@media (pointer: coarse), (max-width: 720px) { .touch-controls { display: flex; } .mute-button { bottom: 5rem; } }
+@media (pointer: coarse), (max-width: 720px) {
+  .touch-controls { display: flex; }
+  .mute-button { bottom: 5rem; }
+}
 @media (max-width: 420px) {
+  .app-shell { display: grid; min-height: 100dvh; padding: 0 0 2.7rem; align-content: start; }
+  .game-stage { width: min(100vw, calc((100dvh - 2.7rem) * 16 / 9)); }
   .start-overlay { align-content: start; padding: .14rem .42rem; }
   .start-copy { padding-bottom: 0; }
   .start-copy h1 { font-size: .8rem; letter-spacing: .04em; line-height: .86; }
   .game-hook, .input-prompt { display: none; }
   .start-button { min-height: .72rem; padding: 0 .2rem; font-size: .29rem; }
-  .touch-controls { right: .25rem; bottom: .22rem; left: .25rem; justify-content: space-between; gap: 0; opacity: .58; }
-  .touch-dpad { grid-template: repeat(3, 2.1rem) / repeat(3, 2.1rem); gap: .14rem; }
-  .touch-button { min-width: 2.1rem; min-height: 2.1rem; padding: .18rem; font-size: .68rem; }
-  .touch-actions { grid-template-columns: repeat(2, 2.7rem); gap: .22rem; }
-  .touch-attack, .touch-dash { min-width: 2.7rem; min-height: 2.7rem; font-size: .56rem; }
+  .touch-controls { position: fixed; right: .25rem; bottom: .25rem; left: .25rem; height: 2.2rem; justify-content: space-between; gap: .25rem; pointer-events: none; }
+  .touch-dpad { grid-template: 2rem / repeat(4, 2rem); gap: .12rem; }
+  .touch-up, .touch-left, .touch-down, .touch-right { grid-area: auto; }
+  .touch-button { min-width: 2rem; min-height: 2rem; padding: .1rem; font-size: .62rem; }
+  .touch-actions { grid-template-columns: repeat(2, 2.2rem); gap: .16rem; }
+  .touch-attack, .touch-dash { min-width: 2.2rem; min-height: 2.2rem; font-size: .46rem; }
   .mute-button { top: .12rem; right: .16rem; bottom: auto; min-height: 1.35rem; padding: .16rem .28rem; font-size: .45rem; transform: none; }
   .mute-mark { width: .32rem; height: .32rem; }
 }

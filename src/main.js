@@ -9,7 +9,7 @@ import {
   updateGame,
 } from "./game-core.mjs";
 import { createAudioManager } from "./audio.mjs";
-import { createRenderer } from "./render.mjs";
+import { createRenderer } from "./render-2d.mjs";
 
 const canvas = document.querySelector("canvas#game");
 const startButton = document.querySelector("button#start-button");
@@ -179,10 +179,10 @@ function updateOverlay() {
   if (loadingCopy instanceof HTMLElement) {
     loadingCopy.hidden = ready;
     loadingCopy.textContent = error
-      ? "가마 전장을 불러오지 못했습니다. 다시 시도하세요."
+      ? "봉인 지도 전장을 불러오지 못했습니다. 다시 시도하세요."
       : renderer.status === "context-lost"
         ? "그래픽 장치를 복구하는 중…"
-        : "가마 전장을 불러오는 중…";
+        : "봉인 지도 전장을 불러오는 중…";
   }
   if (gameTitle instanceof HTMLElement) gameTitle.hidden = !ready;
   if (gameHook instanceof HTMLElement) gameHook.hidden = !ready;
