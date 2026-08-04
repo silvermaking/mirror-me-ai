@@ -6,7 +6,7 @@
 
 ![Kiln Reliquary 실시간 3D 목표](./kiln-reliquary-3d-target.png)
 
-이 이미지는 런타임 배경이 아니라 카메라, 실루엣, 재질과 `OUTSMART` 자세의 목표다. 런타임은 실제 3D 메시와 조명으로 구성하며 이미지의 임의 장식은 복제하지 않는다.
+이 이미지는 런타임 배경이 아니라 카메라, 실루엣, 재질과 `OUTSMART` 자세의 목표다. 런타임은 Blender에서 설계한 low-poly GLB와 실제 조명으로 구성하며 이미지의 임의 장식은 복제하지 않는다.
 
 ## 이전 화면에서 버릴 것
 
@@ -55,9 +55,13 @@
 
 ## 구현 범위
 
-- Three.js `WebGLRenderer`, 고정 카메라, 한 원형 전장, 플레이어 한 명, 분절형 보스 한 기
-- 3D 판정·물리 엔진·자유 카메라·점프·스켈레탈 캐릭터 제작·새 공격·공간 음향 제외
+- Three.js `WebGLRenderer` + `GLTFLoader`, 고정 카메라, 한 원형 전장 GLB, 플레이어 GLB 한 명, 분절형 보스 GLB 한 기
+- 보스 named node: `driver`, `brace`, `shutter_l`, `shutter_r`, `core`, `memory_01..03`; 상태에 따라 rigid transform과 최소 애니메이션을 재생한다.
+- 플레이어는 `idle/run/dash/attack/hit`, 보스는 `idle/remember/lock/strike/stagger/core-open`의 최소 클립만 가진다.
+- 절차형 메시는 위험 구역·LOCK 표적·대시 흔적에만 사용한다. 캐릭터와 보스 외형의 원뿔·원통 조립은 금지한다.
+- 3D 판정·물리 엔진·자유 카메라·점프·새 공격·공간 음향 제외
 - 로컬로 고정한 Three.js와 정적 빌드만 사용하며 런타임 CDN 요청 없음
+- Blender 원본·headless export 스크립트·GLB를 함께 관리하고 첫 자산 총량은 8MB 이하, Draco/KTX2는 사용하지 않는다.
 - 모바일은 DPR 상한, 제한된 동적 그림자와 파티클 수로 같은 구도를 보존
 
 ## PASS

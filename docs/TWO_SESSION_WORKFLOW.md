@@ -7,7 +7,7 @@
 | 세션 | 브랜치 | 소유 파일 | 현재 할 일 |
 | --- | --- | --- | --- |
 | 1. 총괄 디렉팅 | 로컬 `main` | `docs/`, 방향 잠금, 구현 리뷰, 최종 병합 | 구현 작업 관찰, 장면 PASS/FAIL |
-| 2. 플레이어블 구현 | Codex worktree 구현 브랜치 | `src/`, `tests/`, `index.html`, `styles.css`, 자산·배포 구성 | Three.js 3D 렌더러 전환 |
+| 2. 플레이어블 구현 | Codex worktree 구현 브랜치 | `src/`, `tests/`, `index.html`, `styles.css`, `assets/3d/`, Blender 스크립트, 배포 구성 | Blender GLB 제작과 Three.js 연동 |
 
 각 세션은 하위 에이전트를 최대 2명만 동시에 쓴다. Session 1은 `미술 제안 + 전투 가독성 검증`, Session 2는 `구현 + 판정 테스트`로 역할을 고정하며 같은 질문을 두 에이전트에게 반복시키지 않는다.
 
