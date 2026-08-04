@@ -41,16 +41,48 @@
         >
           <div class="start-copy">
             <p id="loading-copy" class="loading-copy">봉인 지도 전장을 불러오는 중…</p>
+            <p class="start-kicker">THE UNMAPPED KINGDOM · 관측 001</p>
             <h1 id="game-title">지도에 없는 왕국</h1>
-            <p id="game-hook" class="game-hook">세 번의 회피를 지도에 봉인하게 한 뒤, 지도 밖으로 한 걸음 나아가라.</p>
-            <p class="input-prompt">WASD 이동 · SPACE 대시(무적 아님) · J 공격</p>
-            <button id="start-button" class="start-button" type="button">아무 전투 입력으로 시작</button>
+            <p id="game-hook" class="game-hook">
+              <strong>첫 세 번의 회피가 보스의 다음 공격이 된다.</strong>
+              같은 방향을 가르친 뒤, LOCK 순간 반대로 빠져 코어를 직접 베어라.
+            </p>
+            <div class="start-rule" aria-label="전투 규칙">
+              <span><b>WASD</b> 위험선 밖으로 이동</span>
+              <span><b>SPACE</b> 빠른 이동 · 무적 아님</span>
+              <span><b>J</b> 열린 코어 직접 공격</span>
+            </div>
+            <button id="start-button" class="start-button" type="button">
+              <span>첫 회피를 기록한다</span>
+              <small>이동 · 대시 · 공격 입력으로 즉시 시작</small>
+            </button>
           </div>
         </section>
 
         <section id="game-over-overlay" class="game-over-overlay" aria-live="assertive" hidden>
-          <p id="game-over-tip">다음에는 위험 구역 밖으로 이동</p>
-          <p id="game-over-restart">분석 중…</p>
+          <div class="death-analysis">
+            <p class="death-kicker">AI 사후 분석</p>
+            <h2 id="game-over-title">당신의 습관을 읽혔다</h2>
+
+            <div class="death-reading" aria-label="AI가 기억한 회피 기록">
+              <p>보스가 기억한 세 번</p>
+              <ol id="game-over-memory" class="memory-sequence">
+                <li data-side="none">·</li>
+                <li data-side="none">·</li>
+                <li data-side="none">·</li>
+              </ol>
+              <p id="game-over-comparison" class="death-comparison">예측 — · 실제 —</p>
+            </div>
+
+            <div class="next-attempt">
+              <span>다음 판에 바꿀 한 가지</span>
+              <strong id="game-over-tip">위험선 밖으로 한 걸음 더 이동</strong>
+            </div>
+
+            <p id="game-over-run" class="death-run">ROUND 1 · 0 PTS · 00:00.0 · OUTSMART 0</p>
+            <p id="game-over-best" class="death-best">최고 기록 R1 · 0점 · 속임 0회</p>
+            <p id="game-over-restart" class="death-restart">분석 중…</p>
+          </div>
         </section>
 
         <button

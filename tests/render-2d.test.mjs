@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PHASE } from "../src/game-core.mjs";
+import { PHASE, timingForRound } from "../src/game-core.mjs";
 import { BOSS_DRIVER_JOINT_SOURCE } from "../assets/2d/sprites/sprite-contract.mjs";
 import { armorAnchor, bossDriverJointAnchor, buildCombatScene, combatDrawPlan, coreAnchor, coreToScreen, drawCombatFrame, driverStampCenter, playerFrameFor } from "../src/render-2d.mjs";
 
@@ -91,6 +91,25 @@ test("renderer combat plan routes the drawn compass stamp to the same LOCK targe
   assert.ok(Math.hypot(plan.driver.origin.x - bossDriverJointAnchor(plan.boss.at).x, plan.driver.origin.y - bossDriverJointAnchor(plan.boss.at).y) < .001);
   assert.ok(Math.hypot(plan.driver.origin.x - (plan.boss.at.x + 133.3125), plan.driver.origin.y - (plan.boss.at.y - 137)) <= .05, "driver joint is the authored LOCK compass anchor after the exact boss draw scale");
   assert.deepEqual(driverStampCenter(plan.driver.target), plan.driver.target);
+});
+
+test("core opening exposes a visible 180ms collapse transition without moving gameplay truth", () => {
+  const duration = timingForRound(1).coreOpen;
+  const atImpact = attackState({ remaining: 0, phase: PHASE.CORE_OPEN });
+  atImpact.phaseTime = duration;
+  const midway = attackState({ remaining: 0, phase: PHASE.CORE_OPEN });
+  midway.phaseTime = duration - .09;
+  const settled = attackState({ remaining: 0, phase: PHASE.CORE_OPEN });
+  settled.phaseTime = duration - .2;
+
+  const impactScene = buildCombatScene(atImpact);
+  const midwayScene = buildCombatScene(midway);
+  const settledScene = buildCombatScene(settled);
+  assert.equal(impactScene.collapseProgress, 0);
+  assert.ok(midwayScene.collapseProgress > 0 && midwayScene.collapseProgress < 1);
+  assert.equal(settledScene.collapseProgress, 1);
+  assert.deepEqual(impactScene.boss, midwayScene.boss, "recoil is presentation-only and never shifts the boss floor point");
+  assert.deepEqual(midwayScene.player, settledScene.player, "opening art never shifts the player floor point");
 });
 
 test("every driver-visible boss frame uses the one authored joint in the final Canvas path", () => {

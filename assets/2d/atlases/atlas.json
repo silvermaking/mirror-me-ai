@@ -1,0 +1,569 @@
+{
+  "version": 1,
+  "pipeline": "Blender 5.2 authored meshes, fixed orthographic camera, transparent WebP atlas",
+  "logicalSize": [
+    1280,
+    720
+  ],
+  "projection": {
+    "kind": "fixed-quarter",
+    "runtimeTruth": "src/game-core.mjs 2D plane",
+    "cameraControls": false
+  },
+  "sources": [
+    "assets/2d/source/map_challenger_characters.blend",
+    "assets/2d/source/map_challenger_arena.blend"
+  ],
+  "atlases": {
+    "arena": {
+      "file": "arena-plate.webp",
+      "width": 2560,
+      "height": 1440,
+      "frameWidth": 2560,
+      "frameHeight": 1440,
+      "columns": 1
+    },
+    "boss": {
+      "file": "boss-body.webp",
+      "width": 2560,
+      "height": 512,
+      "frameWidth": 640,
+      "frameHeight": 512,
+      "columns": 4
+    },
+    "driver": {
+      "file": "boss-driver.webp",
+      "width": 1920,
+      "height": 320,
+      "frameWidth": 640,
+      "frameHeight": 320,
+      "columns": 3
+    },
+    "player": {
+      "file": "player.webp",
+      "width": 1024,
+      "height": 512,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "columns": 4
+    },
+    "relics": {
+      "file": "relics.webp",
+      "width": 768,
+      "height": 256,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "columns": 3
+    }
+  },
+  "requiredAnchors": {
+    "boss": [
+      "feet",
+      "root",
+      "core",
+      "shoulder"
+    ],
+    "driver-upper": [
+      "shoulder",
+      "elbow"
+    ],
+    "driver-forearm": [
+      "elbow",
+      "wrist"
+    ],
+    "driver-stamp": [
+      "wrist",
+      "stampCenter"
+    ],
+    "player": [
+      "feet",
+      "root",
+      "hand",
+      "swordTip"
+    ],
+    "boundary-blade": [
+      "root",
+      "hand",
+      "swordTip"
+    ]
+  },
+  "frames": {
+    "boss-closed": {
+      "atlas": "boss",
+      "order": 0,
+      "rect": [
+        0,
+        0,
+        640,
+        512
+      ],
+      "anchors": {
+        "feet": [
+          308.679,
+          399.894
+        ],
+        "root": [
+          308.679,
+          403.161
+        ],
+        "core": [
+          267.274,
+          327.47
+        ],
+        "shoulder": [
+          434.832,
+          256.247
+        ],
+        "memory1": [
+          145.433,
+          179.544
+        ],
+        "memory2": [
+          151.471,
+          221.811
+        ],
+        "memory3": [
+          157.509,
+          264.077
+        ]
+      }
+    },
+    "boss-lock": {
+      "atlas": "boss",
+      "order": 1,
+      "rect": [
+        640,
+        0,
+        640,
+        512
+      ],
+      "anchors": {
+        "feet": [
+          308.679,
+          399.894
+        ],
+        "root": [
+          308.679,
+          403.161
+        ],
+        "core": [
+          272.709,
+          330.225
+        ],
+        "shoulder": [
+          445.022,
+          261.413
+        ],
+        "memory1": [
+          145.433,
+          179.544
+        ],
+        "memory2": [
+          151.471,
+          221.811
+        ],
+        "memory3": [
+          157.509,
+          264.077
+        ]
+      }
+    },
+    "boss-collapse-open": {
+      "atlas": "boss",
+      "order": 2,
+      "rect": [
+        1280,
+        0,
+        640,
+        512
+      ],
+      "anchors": {
+        "feet": [
+          308.679,
+          399.894
+        ],
+        "root": [
+          308.679,
+          403.161
+        ],
+        "core": [
+          284.785,
+          336.347
+        ],
+        "shoulder": [
+          467.665,
+          299.029
+        ],
+        "memory1": [
+          145.433,
+          179.544
+        ],
+        "memory2": [
+          151.471,
+          221.811
+        ],
+        "memory3": [
+          157.509,
+          264.077
+        ]
+      }
+    },
+    "boss-core-hit": {
+      "atlas": "boss",
+      "order": 3,
+      "rect": [
+        1920,
+        0,
+        640,
+        512
+      ],
+      "anchors": {
+        "feet": [
+          308.679,
+          399.894
+        ],
+        "root": [
+          308.679,
+          403.161
+        ],
+        "core": [
+          284.785,
+          329.813
+        ],
+        "shoulder": [
+          467.665,
+          299.029
+        ],
+        "memory1": [
+          145.433,
+          179.544
+        ],
+        "memory2": [
+          151.471,
+          221.811
+        ],
+        "memory3": [
+          157.509,
+          264.077
+        ]
+      }
+    },
+    "driver-upper": {
+      "atlas": "driver",
+      "order": 0,
+      "rect": [
+        0,
+        0,
+        640,
+        320
+      ],
+      "anchors": {
+        "shoulder": [
+          86.811,
+          41.784
+        ],
+        "elbow": [
+          557.853,
+          280.581
+        ]
+      }
+    },
+    "driver-forearm": {
+      "atlas": "driver",
+      "order": 1,
+      "rect": [
+        640,
+        0,
+        640,
+        320
+      ],
+      "anchors": {
+        "elbow": [
+          50.415,
+          23.333
+        ],
+        "wrist": [
+          586.522,
+          299.093
+        ]
+      }
+    },
+    "driver-stamp": {
+      "atlas": "driver",
+      "order": 2,
+      "rect": [
+        1280,
+        0,
+        640,
+        320
+      ],
+      "anchors": {
+        "wrist": [
+          194.003,
+          96.125
+        ],
+        "stampCenter": [
+          426.558,
+          230.296
+        ]
+      }
+    },
+    "player-idle": {
+      "atlas": "player",
+      "order": 0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ],
+      "anchors": {
+        "feet": [
+          128.0,
+          199.43
+        ],
+        "root": [
+          128.0,
+          199.43
+        ],
+        "hand": [
+          137.803,
+          164.088
+        ],
+        "swordTip": [
+          186.819,
+          164.891
+        ]
+      }
+    },
+    "player-run": {
+      "atlas": "player",
+      "order": 1,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ],
+      "anchors": {
+        "feet": [
+          128.0,
+          199.43
+        ],
+        "root": [
+          128.0,
+          199.43
+        ],
+        "hand": [
+          155.776,
+          178.15
+        ],
+        "swordTip": [
+          201.523,
+          191.441
+        ]
+      }
+    },
+    "player-dash": {
+      "atlas": "player",
+      "order": 2,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ],
+      "anchors": {
+        "feet": [
+          128.0,
+          199.43
+        ],
+        "root": [
+          128.0,
+          199.43
+        ],
+        "hand": [
+          168.029,
+          197.092
+        ],
+        "swordTip": [
+          220.313,
+          218.647
+        ]
+      }
+    },
+    "player-attack-windup": {
+      "atlas": "player",
+      "order": 3,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ],
+      "anchors": {
+        "feet": [
+          128.0,
+          199.43
+        ],
+        "root": [
+          128.0,
+          199.43
+        ],
+        "hand": [
+          56.111,
+          102.164
+        ],
+        "swordTip": [
+          11.997,
+          43.024
+        ]
+      }
+    },
+    "player-attack-contact": {
+      "atlas": "player",
+      "order": 4,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ],
+      "anchors": {
+        "feet": [
+          128.0,
+          199.43
+        ],
+        "root": [
+          128.0,
+          199.43
+        ],
+        "hand": [
+          170.48,
+          182.068
+        ],
+        "swordTip": [
+          239.102,
+          210.491
+        ]
+      }
+    },
+    "player-attack-recoil": {
+      "atlas": "player",
+      "order": 5,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ],
+      "anchors": {
+        "feet": [
+          128.0,
+          199.43
+        ],
+        "root": [
+          128.0,
+          199.43
+        ],
+        "hand": [
+          118.197,
+          160.514
+        ],
+        "swordTip": [
+          167.212,
+          206.579
+        ]
+      }
+    },
+    "player-hurt": {
+      "atlas": "player",
+      "order": 6,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ],
+      "anchors": {
+        "feet": [
+          128.0,
+          199.43
+        ],
+        "root": [
+          128.0,
+          199.43
+        ],
+        "hand": [
+          109.211,
+          171.517
+        ],
+        "swordTip": [
+          153.325,
+          220.756
+        ]
+      }
+    },
+    "memory-plaque": {
+      "atlas": "relics",
+      "order": 0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ],
+      "anchors": {
+        "root": [
+          128.0,
+          128.0
+        ]
+      }
+    },
+    "lock-seal": {
+      "atlas": "relics",
+      "order": 1,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ],
+      "anchors": {
+        "root": [
+          128.0,
+          128.0
+        ]
+      }
+    },
+    "boundary-blade": {
+      "atlas": "relics",
+      "order": 2,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ],
+      "anchors": {
+        "root": [
+          128.0,
+          128.0
+        ],
+        "hand": [
+          44.674,
+          85.758
+        ],
+        "swordTip": [
+          211.326,
+          170.243
+        ]
+      }
+    }
+  },
+  "runtimeRules": {
+    "driver": "stampCenter equals immutable coreToScreen(lock.zone), then remains frozen",
+    "player": "feet/root/shadow share coreToScreen(player); swordTip reaches core only on direct contact",
+    "memory": "exactly three identical authored plaques occupy three boss sockets"
+  }
+}

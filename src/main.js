@@ -21,7 +21,12 @@ const loadingCopy = document.querySelector("#loading-copy");
 const gameTitle = document.querySelector("#game-title");
 const gameHook = document.querySelector("#game-hook");
 const gameOverOverlay = document.querySelector("#game-over-overlay");
+const gameOverTitle = document.querySelector("#game-over-title");
+const gameOverMemory = document.querySelector("#game-over-memory");
+const gameOverComparison = document.querySelector("#game-over-comparison");
 const gameOverTip = document.querySelector("#game-over-tip");
+const gameOverRun = document.querySelector("#game-over-run");
+const gameOverBest = document.querySelector("#game-over-best");
 const gameOverRestart = document.querySelector("#game-over-restart");
 
 if (!(canvas instanceof HTMLCanvasElement)) throw new Error("#game canvas is required");
@@ -89,6 +94,24 @@ function updateBest(summary) {
 
 function sideLabel(side) {
   return side === "left" ? "왼쪽" : side === "right" ? "오른쪽" : "측면 없음";
+}
+
+function sideMark(side) {
+  return side === "left" ? "←" : side === "right" ? "→" : "·";
+}
+
+function formatTime(seconds) {
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  const minutes = Math.floor(safe / 60);
+  const remainder = (safe % 60).toFixed(1).padStart(4, "0");
+  return `${String(minutes).padStart(2, "0")}:${remainder}`;
+}
+
+function deathTitleFor(death) {
+  if (!death) return "분석 완료";
+  if (death.kind === "read") return "당신의 습관을 읽혔다";
+  if (death.kind === "greed") return "한 번 더가 패배가 됐다";
+  return `${death.attackName || "공격"}에 쓰러졌다`;
 }
 
 function eventAnnouncement(event) {
@@ -175,7 +198,9 @@ function updateOverlay() {
   if (!(startOverlay instanceof HTMLElement)) return;
   const ready = renderer.isReady;
   const error = renderer.status === "error";
+  touchControls.hidden = state.phase === PHASE.WAITING;
   startOverlay.hidden = ready && state.phase !== PHASE.WAITING;
+  startOverlay.dataset.status = error ? "error" : ready ? "ready" : "loading";
   if (loadingCopy instanceof HTMLElement) {
     loadingCopy.hidden = ready;
     loadingCopy.textContent = error
@@ -187,15 +212,53 @@ function updateOverlay() {
   if (gameTitle instanceof HTMLElement) gameTitle.hidden = !ready;
   if (gameHook instanceof HTMLElement) gameHook.hidden = !ready;
   startButton.hidden = !ready && !error;
-  startButton.textContent = error ? "전장 다시 불러오기" : "아무 전투 입력으로 시작";
+  const startButtonTitle = startButton.querySelector("span");
+  const startButtonDetail = startButton.querySelector("small");
+  if (startButtonTitle) {
+    startButtonTitle.textContent = error ? "전장 다시 불러오기" : "첫 회피를 기록한다";
+  }
+  if (startButtonDetail) {
+    startButtonDetail.textContent = error
+      ? "로컬 전장 자산을 다시 확인합니다"
+      : "이동 · 대시 · 공격 입력으로 즉시 시작";
+  }
   if (gameOverOverlay instanceof HTMLElement) {
     gameOverOverlay.hidden = state.phase !== PHASE.GAME_OVER;
   }
-  if (gameOverTip instanceof HTMLElement && state.phase === PHASE.GAME_OVER) {
-    gameOverTip.textContent = state.death?.tip || "다음에는 위험 구역 밖으로 이동";
-  }
-  if (gameOverRestart instanceof HTMLElement && state.phase === PHASE.GAME_OVER) {
-    gameOverRestart.textContent = canRestart(state) ? "ENTER / SPACE 다시 속이기" : "분석 중…";
+  if (state.phase === PHASE.GAME_OVER) {
+    if (gameOverTitle instanceof HTMLElement) {
+      gameOverTitle.textContent = deathTitleFor(state.death);
+    }
+    if (gameOverMemory instanceof HTMLOListElement) {
+      const remembered = state.death?.memory || [];
+      [...gameOverMemory.children].forEach((cell, index) => {
+        if (!(cell instanceof HTMLElement)) return;
+        const side = remembered[index] || "none";
+        cell.dataset.side = side;
+        cell.textContent = sideMark(side);
+        cell.setAttribute("aria-label", side === "none" ? `${index + 1}번째 기억 없음` : `${index + 1}번째 ${sideLabel(side)} 회피`);
+      });
+    }
+    if (gameOverComparison instanceof HTMLElement) {
+      gameOverComparison.textContent = state.death?.kind === "read"
+        ? `예측 ${sideLabel(state.death.predictedSide)} · 실제 ${sideLabel(state.death.actualSide)}`
+        : `치명타 · ${state.death?.attackName || "전장 공격"}`;
+    }
+    if (gameOverTip instanceof HTMLElement) {
+      gameOverTip.textContent = state.death?.tip || "다음에는 위험 구역 밖으로 이동";
+    }
+    if (gameOverRun instanceof HTMLElement) {
+      gameOverRun.textContent = `ROUND ${state.round} · ${state.stats.score} PTS · ${formatTime(state.elapsed)} · OUTSMART ${state.stats.outsmarts}`;
+    }
+    if (gameOverBest instanceof HTMLElement) {
+      gameOverBest.textContent = `최고 기록 R${best.currentRound || 1} · ${best.score || 0}점 · 속임 ${best.outsmarts || 0}회`;
+    }
+    if (gameOverRestart instanceof HTMLElement) {
+      const remaining = Math.max(0, CONFIG.restartDelay - state.gameOverElapsed);
+      gameOverRestart.textContent = canRestart(state)
+        ? "ENTER / SPACE · 방금 읽힌 한 가지를 바꿔 다시 도전"
+        : `재도전 준비 ${remaining.toFixed(1)}초`;
+    }
   }
 }
 
