@@ -1,12 +1,12 @@
 # Mirror Me AI — 미술 방향 20초 검토
 
-현재 우선안은 **A**다. 긴 분석은 에이전트 작업 자료로 분리하고, 공동 디렉터는 아래 한 문장과 한 장만 비교한다.
+공동 디렉터의 최종 선택은 **A. Kiln Reliquary**다. B와 C는 비교 기록으로만 보존한다.
 
 ## A. Kiln Reliquary — 우선안
 
 세 장의 도편에 구운 발놀림을 맹신한 소성 기계가 빈곳을 내려쳐 스스로 화구를 여는 산업 제례장 액션 보스전.
 
-![A. Kiln Reliquary](./direction-a-kiln-reliquary.png)
+![A. Kiln Reliquary](../../docs/design/kiln-reliquary-outsmart-keyframe.png)
 
 ## B. Print Tribunal
 
@@ -20,4 +20,4 @@
 
 ![C. Counterweight Games](./direction-c-counterweight-games.png)
 
-**현재 결정:** A의 역동적 키프레임 확인 후 `A 확정` 또는 `A 재작업`.
+**결정 완료:** A를 첫 비주얼 수직 슬라이스의 방향으로 잠근다.
