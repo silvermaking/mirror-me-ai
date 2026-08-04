@@ -64,6 +64,18 @@ def box(name, size, mat, parent=None, loc=(0, 0, 0), rot=(0, 0, 0), edge=.04):
     return obj
 
 
+def profile_panel(name, outline, depth, mat, parent=None, loc=(0, 0, 0), edge=.035):
+    """An extruded irregular X/Z silhouette for authored walls, arches and ducts."""
+    verts = [(x, -depth / 2, z) for x, z in outline] + [(x, depth / 2, z) for x, z in outline]
+    n = len(outline)
+    faces = [tuple(range(n)), tuple(range(2 * n - 1, n - 1, -1))]
+    faces += [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
+    obj = item(name, verts, faces, mat, parent)
+    obj.location = loc
+    bevel(obj, edge)
+    return obj
+
+
 def lathe(name, profile, sides, mat, parent=None, loc=(0, 0, 0)):
     verts = []
     for r, z in profile:
@@ -98,15 +110,54 @@ def beam_between(name, a, b, thickness, mat, parent, edge=.025):
     return obj
 
 
+def descendants(parent):
+    stack = list(parent.children)
+    result = []
+    while stack:
+        current = stack.pop()
+        result.append(current)
+        stack.extend(current.children)
+    return result
+
+
+def merge_static_by_material(named_nodes):
+    """Collapse static arena meshes to one GLB primitive per material/category.
+
+    The four required named nodes remain empties. Their descendant meshes are
+    authored separately for clarity, then joined only after all bevel/profile
+    work has been applied. This preserves the silhouette while avoiding one
+    runtime primitive per brick, rail post, or duct detail.
+    """
+    for node in named_nodes:
+        groups = {}
+        for child in descendants(node):
+            if child.type != "MESH" or not child.data.materials:
+                continue
+            groups.setdefault(child.data.materials[0].name, []).append(child)
+        for material_name, meshes in groups.items():
+            bpy.ops.object.select_all(action="DESELECT")
+            for mesh in meshes:
+                mesh.select_set(True)
+            active = meshes[0]
+            bpy.context.view_layer.objects.active = active
+            bpy.ops.object.join()
+            active.name = f"{node.name}_{material_name}_static"
+            world_matrix = active.matrix_world.copy()
+            active.parent = node
+            active.matrix_world = world_matrix
+
+
 def build():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    brick_a = material("refractory_brick_umber", (.22, .105, .055), .0, .88)
-    brick_b = material("refractory_brick_ash", (.34, .19, .105), .0, .84)
+    brick_a = material("refractory_brick", (.22, .105, .055), .0, .88)
+    brick_b = brick_a  # One brick material keeps the runtime arena at four materials.
     iron = material("sooted_foundry_iron", (.055, .050, .042), .74, .38)
     brass = material("oxidized_brass", (.30, .15, .045), .67, .38)
-    fire = material("kiln_fire", (.94, .105, .012), .02, .44, ((1.0, .08, .004), 3.6))
-    ash = material("ash_vent_recess", (.011, .009, .007), .0, .96)
+    # Facility mouths are only dark residual heat.  The boss core owns the
+    # scene's brightest white/orange contrast during CORE_OPEN.
+    fire = material("kiln_fire", (.22, .012, .002), .02, .68, ((.45, .018, .001), .42))
+    ash = iron  # Dark vents use the existing foundry-iron material, not a fifth slot.
 
     root = empty("arena_root")
     root["asset"] = "Kiln Reliquary refractory turntable"
@@ -156,16 +207,84 @@ def build():
         b = (rail_r * math.cos(nxt), rail_r * math.sin(nxt), .93)
         beam_between("low_guardrail", (x, y, .93), b, .10, iron, rail, .02)
 
-    # Only outer/background kiln machinery; it frames the duel without encroaching on the plate.
-    for i, a in enumerate((.60, 1.55, 2.35, 3.70, 4.58, 5.55)):
-        radius = 9.0 if i % 2 else 8.6
-        x, y = radius * math.cos(a), radius * math.sin(a)
-        stack = empty("outer_kiln_stack", facility, (x, y, 0))
-        lathe("facility_kiln_base", [(0.58, 0), (.78, .10), (.76, .62), (.54, .74)], 8, iron, stack)
-        lathe("facility_brick_chimney", [(.43, .70), (.55, .82), (.49, 1.85), (.32, 2.08)], 8, brick_b, stack)
-        box("facility_fire_slot", (.30, .075, .18), fire, stack, (0, -.57, .64), (0, 0, a), .015)
-        box("facility_side_pipe", (.22, .54, .18), brass, stack, (.57, .10, .70), (0, .25, .30), .04)
+    # Rear half only: a connected firing wall replaces the old floating stack ring.
+    # It deliberately stays below the boss memory silhouette at the center, while
+    # the two chimneys rise off to either side rather than directly behind it.
+    rear_y = 8.15
+    profile_panel(
+        "rear_firing_wall",
+        [(-4.90, 0.0), (-4.84, .72), (-4.42, 1.04), (-3.60, 1.14), (-3.14, 1.46),
+         (-1.28, 1.46), (-.78, 1.25), (.43, 1.30), (1.10, 1.52), (3.45, 1.52),
+         (4.02, 1.34), (4.88, 1.20), (4.90, 0.0)],
+        .58, brick_a, facility, (0, rear_y, .38), .06,
+    )
+    # Irregular upper brick courses break the wall silhouette without a repeated arch rhythm.
+    for x, width, z, lean in ((-3.85, .76, 1.58, -.10), (-1.95, 1.22, 1.60, .06),
+                              (.35, .84, 1.54, -.08), (2.45, 1.08, 1.72, .10)):
+        cap = profile_panel(
+            "firing_wall_coping",
+            [(-width / 2, -.08), (width / 2, -.02), (width / 2 - .10, .13), (-width / 2 + .14, .18)],
+            .70, brick_b, facility, (x, rear_y - .02, z), .025,
+        )
+        cap.rotation_euler.y = lean
 
+    # Three deliberately different fire mouths: their black jambs, small embers and offset crowns
+    # read as a single kiln house, not as repeated decorative columns.
+    arch_specs = [
+        (-2.72, .72, .72, .15),
+        (-.18, 1.00, .98, .04),
+        (2.55, .82, .82, .22),
+    ]
+    for index, (x, half_w, height, base) in enumerate(arch_specs, 1):
+        frame_outline = [(-half_w - .16, 0), (-half_w - .12, height * .58), (-half_w * .64, height * .93),
+                         (0, height + .14), (half_w * .68, height * .86), (half_w + .12, height * .48),
+                         (half_w + .08, 0)]
+        mouth_outline = [(-half_w, .02), (-half_w * .92, height * .54), (-half_w * .48, height * .83),
+                         (0, height), (half_w * .50, height * .78), (half_w * .93, height * .42), (half_w, .02)]
+        profile_panel("asym_fire_arch_frame", frame_outline, .18, iron, facility, (x, rear_y - .36, .44 + base), .035)
+        profile_panel("furnace_mouth_ember", mouth_outline, .045, fire, facility, (x, rear_y - .47, .44 + base), .012)
+        # A skewed brass lintel says the openings are mechanically rebuilt, rather than ornamental.
+        profile_panel("arch_lintel_repair", [(-half_w * .62, -.05), (half_w * .60, .03),
+                                               (half_w * .48, .13), (-half_w * .55, .10)],
+                      .11, brass, facility, (x + (.10 if index == 2 else -.05), rear_y - .53, .44 + base + height + .04), .018)
+
+    # Two non-matching chimneys structurally land on the wall's side buttresses.
+    for x, base_z, height, sides in ((-4.04, 1.36, 2.02, 7), (3.78, 1.42, 2.58, 9)):
+        stack = empty("wall_bound_chimney", facility, (x, rear_y + .08, base_z))
+        lathe("chimney_foot", [(.48, 0), (.67, .12), (.61, .48), (.43, .61)], sides, iron, stack)
+        lathe("chimney_brick_taper", [(.37, .55), (.49, .70), (.40, height - .14), (.28, height)], sides, brick_b, stack)
+        lathe("chimney_cut_cap", [(.29, height - .02), (.41, height + .06), (.35, height + .19)], sides, brass, stack)
+        profile_panel("chimney_wall_buttress", [(-.42, 0), (-.34, .64), (.12, .78), (.46, .48), (.38, 0)],
+                      .70, brick_a, stack, (0, -.30, -.02), .035)
+
+    # One stepped, wide duct ties the high right chimney to the firing wall and rail-side vent header.
+    profile_panel(
+        "connected_draft_duct",
+        [(-1.54, -.28), (.54, -.28), (.54, -.13), (1.38, -.13), (1.38, .34),
+         (.82, .34), (.82, .13), (-1.54, .13)],
+        .62, iron, facility, (1.66, rear_y - .24, 1.48), .055,
+    )
+    profile_panel("duct_brass_seam", [(-1.22, -.045), (1.06, -.045), (1.02, .075), (-1.18, .075)],
+                  .68, brass, facility, (1.66, rear_y - .57, 1.52), .018)
+    profile_panel("rail_vent_header", [(-2.30, -.13), (2.06, -.09), (2.24, .13), (-2.14, .18)],
+                  .34, iron, facility, (0.0, 7.55, .72), .035)
+    # Low return structures close the rear room at each end without creating a
+    # foreground wall: one refractory return and one dark iron duct return.
+    left_return = profile_panel(
+        "left_rear_return_wall",
+        [(-1.28, 0), (-1.12, .42), (-.66, .62), (.95, .55), (1.26, .30), (1.18, 0)],
+        .46, brick_a, facility, (-6.00, 7.12, .42), .045,
+    )
+    left_return.rotation_euler.z = math.radians(34)
+    right_return = profile_panel(
+        "right_rear_duct_return",
+        [(-1.18, 0), (-1.03, .26), (-.30, .37), (-.12, .60), (1.22, .50),
+         (1.30, .19), (1.14, 0)],
+        .48, iron, facility, (6.05, 7.12, .42), .045,
+    )
+    right_return.rotation_euler.z = math.radians(-34)
+
+    merge_static_by_material((turntable, rail, exhaust, facility))
     for node in (root, turntable, rail, exhaust, facility):
         node["named_node"] = True
     BLEND.parent.mkdir(parents=True, exist_ok=True)
