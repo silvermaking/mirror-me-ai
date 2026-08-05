@@ -171,20 +171,9 @@ function transformLocal(root, local, rotation = 0, scale = 1) {
 }
 
 export function classicCoreScreenAnchor(state, now = 0) {
-  const base = projectWorld(state.boss);
-  const target = state.lock
-    ? projectWorld(state.lock.zone)
-    : projectWorld({ x: state.boss.x + 154, y: state.boss.y + 116 });
-  const resolved = state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR;
-  const direction = target.x >= base.x ? 1 : -1;
-  const tilt = resolved ? direction * 0.27 : state.lock ? direction * 0.035 : 0;
-  const shake = state.visual.shake ? Math.sin(now * 85) * state.visual.shake * 14 : 0;
-  const bodyBase = {
-    x: base.x + shake + (resolved ? direction * 29 : 0),
-    y: base.y + (resolved ? 27 : 0),
-  };
-  const root = { x: bodyBase.x, y: bodyBase.y + 9 };
-  return transformLocal(root, { x: 4, y: -63 }, tilt, 1.02);
+  const motion = classicBossMotionPlan(state, now);
+  const root = { x: motion.bodyBase.x, y: motion.bodyBase.y + 9 };
+  return transformLocal(root, { x: 4, y: -63 }, motion.bodyTilt, 1.02);
 }
 
 function easeOutCubic(value) {
@@ -197,6 +186,240 @@ function easeInOutCubic(value) {
   return amount < 0.5
     ? 4 * amount ** 3
     : 1 - ((-2 * amount + 2) ** 3) / 2;
+}
+
+function phaseProgress(remaining, duration) {
+  if (!Number.isFinite(duration) || duration <= 0) return 1;
+  return clamp(1 - (Number.isFinite(remaining) ? remaining : duration) / duration, 0, 1);
+}
+
+export function classicBossMotionPlan(state, now = 0) {
+  const boss = state.boss || { x: CONFIG.bossX, y: CONFIG.bossY };
+  const base = projectWorld(boss);
+  const hasLock = Boolean(state.lock?.zone);
+  const target = hasLock
+    ? projectWorld(state.lock.zone)
+    : projectWorld({
+        x: boss.x + (state.predictedSide === "left" ? -154 : 154),
+        y: boss.y + 116,
+      });
+  const direction = target.x >= base.x ? 1 : -1;
+  const timing = timingForRound(Number.isFinite(state.round) ? state.round : 1);
+  let stage = "idle";
+  let bodyOffsetX = 0;
+  let bodyOffsetY = 0;
+  let bodyTilt = 0;
+  let driverRetract = 78;
+  let strikeProgress = 0;
+  let braceLoad = 0;
+  let cableTension = 0;
+  let contact = false;
+
+  switch (state.phase) {
+    case PHASE.ENGAGE: {
+      stage = "engage";
+      const settle = phaseProgress(state.phaseTime, CONFIG.engageDuration);
+      bodyOffsetY = (1 - easeOutCubic(settle)) * -7;
+      driverRetract = 86;
+      break;
+    }
+    case PHASE.EXPLORE: {
+      stage = "explore";
+      const progress = phaseProgress(state.phaseTime, timing.explore);
+      const load = clamp(progress / 0.58, 0, 1);
+      const release = clamp((progress - 0.58) / 0.42, 0, 1);
+      bodyOffsetY = mix(0, 7, easeInOutCubic(load)) - Math.sin(release * Math.PI) * 5;
+      bodyTilt = direction * Math.sin(release * Math.PI) * 0.035;
+      braceLoad = progress < 0.58 ? easeInOutCubic(load) : 1 - easeOutCubic(release);
+      driverRetract = 88;
+      break;
+    }
+    case PHASE.EXPLORE_RECOVER:
+      stage = "recover";
+      bodyOffsetY = Math.sin(
+        phaseProgress(state.phaseTime, CONFIG.exploreRecoverDuration) * Math.PI,
+      ) * -3;
+      driverRetract = 86;
+      break;
+    case PHASE.COMBINE: {
+      stage = "combine";
+      const progress = phaseProgress(state.phaseTime, CONFIG.combineDuration);
+      bodyOffsetX = direction * mix(0, -5, easeInOutCubic(progress));
+      bodyOffsetY = mix(0, 5, easeInOutCubic(progress));
+      bodyTilt = direction * mix(0, -0.022, easeInOutCubic(progress));
+      driverRetract = mix(86, 94, easeInOutCubic(progress));
+      cableTension = easeInOutCubic(progress);
+      break;
+    }
+    case PHASE.LOCK:
+    case PHASE.RELOCK: {
+      stage = "locked";
+      const duration = state.phase === PHASE.RELOCK ? timing.relock : timing.lock;
+      const progress = phaseProgress(state.phaseTime, duration);
+      bodyOffsetX = direction * -8;
+      bodyOffsetY = 5;
+      bodyTilt = direction * -0.03;
+      driverRetract = 86;
+      cableTension = 1;
+      strikeProgress = progress * 0.04;
+      break;
+    }
+    case PHASE.PREDICTION: {
+      stage = "strike";
+      const progress = phaseProgress(state.phaseTime, timing.prediction);
+      const load = clamp(progress / 0.42, 0, 1);
+      const hold = progress >= 0.42 && progress < 0.58;
+      const release = clamp((progress - 0.58) / 0.42, 0, 1);
+      bodyOffsetX = direction * mix(-8, -14, easeInOutCubic(load));
+      bodyOffsetY = mix(5, 9, easeInOutCubic(load));
+      bodyTilt = direction * mix(-0.03, -0.065, easeInOutCubic(load));
+      if (progress >= 0.58) {
+        bodyOffsetX = direction * mix(-14, 4, easeInOutCubic(release));
+        bodyOffsetY = mix(9, 1, easeOutCubic(release));
+        bodyTilt = direction * mix(-0.065, 0.018, easeInOutCubic(release));
+      }
+      driverRetract = hold
+        ? 116
+        : progress < 0.42
+          ? mix(86, 116, easeInOutCubic(load))
+          : mix(116, 8, easeInOutCubic(release));
+      strikeProgress = progress;
+      braceLoad = progress < 0.58 ? load : 1 - release;
+      cableTension = 1;
+      break;
+    }
+    case PHASE.CORE_OPEN:
+    case PHASE.ROUND_CLEAR: {
+      stage = "overextended";
+      const openAge = state.phase === PHASE.CORE_OPEN
+        ? Math.max(0, timing.coreOpen - (state.phaseTime || 0))
+        : 1;
+      const braceImpact = easeOutCubic(clamp(openAge / 0.055, 0, 1));
+      const collapse = easeOutCubic(clamp((openAge - 0.035) / 0.13, 0, 1));
+      bodyOffsetX = direction * 34 * collapse;
+      bodyOffsetY = 29 * collapse;
+      bodyTilt = direction * 0.31 * collapse;
+      driverRetract = 0;
+      strikeProgress = 1;
+      braceLoad = -braceImpact;
+      cableTension = 1;
+      contact = true;
+      break;
+    }
+    case PHASE.GAME_OVER:
+      stage = "frozen";
+      if (state.death?.attackName === "판독 공격" && hasLock) {
+        bodyOffsetX = direction * 8;
+        bodyOffsetY = 8;
+        bodyTilt = direction * 0.08;
+        driverRetract = 0;
+        strikeProgress = 1;
+        cableTension = 1;
+        contact = true;
+      }
+      break;
+    default:
+      break;
+  }
+
+  const impact = state.visual?.impact;
+  if (impact?.tone === "core" || impact?.tone === "armor") {
+    const duration = impact.tone === "core" ? 0.3 : 0.24;
+    const age = clamp(duration - impact.remaining, 0, duration);
+    const wave = Math.exp(-15 * age) * Math.sin(age * 42);
+    const player = projectWorld(state.player || { x: 0, y: 0 });
+    const push = vector(player, base);
+    const strength = impact.tone === "core" ? 18 : 8;
+    bodyOffsetX += push.x * strength * wave;
+    bodyOffsetY += push.y * strength * 0.7 * wave;
+    bodyTilt += Math.sign(push.x || direction) * wave * (impact.tone === "core" ? 0.11 : 0.045);
+  }
+
+  const bodyBase = {
+    x: base.x + bodyOffsetX,
+    y: base.y + bodyOffsetY,
+  };
+  const bodyShoulder = {
+    x: bodyBase.x + direction * 58,
+    y: bodyBase.y - 112,
+  };
+  // After LOCK the shoulder pin, head and target share one immutable axis.
+  // The furnace body may recoil around that assembly, but the aim cannot track
+  // the player's later movement or cheat toward the outcome.
+  const fixedShoulder = {
+    x: base.x + direction * 58,
+    y: base.y - 112,
+  };
+  const shoulder = hasLock ? fixedShoulder : bodyShoulder;
+  const axis = vector(shoulder, target);
+  const driverHead = contact
+    ? classicDriverContact(target)
+    : {
+        x: target.x - axis.x * driverRetract,
+        y: target.y - axis.y * driverRetract,
+      };
+
+  return Object.freeze({
+    stage,
+    base,
+    bodyBase,
+    bodyTilt,
+    target,
+    direction,
+    shoulder,
+    driverHead,
+    driverRetract,
+    strikeProgress,
+    braceLoad,
+    cableTension,
+    contact,
+    axisAngle: Math.atan2(axis.y, axis.x),
+    now,
+  });
+}
+
+export function classicLockVisualPlan(state) {
+  if (!state.lock?.zone) {
+    return Object.freeze({ active: false, age: 0, stamp: 0, scale: 1, ring: 0 });
+  }
+  const age = Math.max(0, (state.elapsed || 0) - (state.lock.createdAt || 0));
+  const stamp = easeOutCubic(clamp(age / 0.12, 0, 1));
+  const settle = Math.exp(-18 * age) * Math.cos(38 * age);
+  return Object.freeze({
+    active: true,
+    age,
+    stamp,
+    scale: 1 + (1 - stamp) * 0.48 + settle * 0.04,
+    ring: age <= 0.2 ? clamp(age / 0.2, 0, 1) : 0,
+  });
+}
+
+export function classicMemoryMotionPlan(state, index, filledLength = state.memory?.length || 0) {
+  const active = index >= 0 && index < filledLength;
+  if (!active) {
+    return Object.freeze({ active: false, inserting: false, insertion: 0, alignment: 0 });
+  }
+  let insertionAge = Infinity;
+  let insertionDuration = 0.16;
+  if (state.visual?.escapeMarker && index === (state.memory?.length || 0) - 1) {
+    if (state.phase === PHASE.EXPLORE_RECOVER) {
+      insertionAge = Math.max(0, CONFIG.exploreRecoverDuration - (state.phaseTime || 0));
+    } else if (state.phase === PHASE.COMBINE) {
+      insertionAge = Math.max(0, CONFIG.combineDuration - (state.phaseTime || 0));
+      insertionDuration = 0.24;
+    }
+  }
+  const inserting = insertionAge <= insertionDuration;
+  const insertion = inserting
+    ? easeInOutCubic(clamp(insertionAge / insertionDuration, 0, 1))
+    : 1;
+  const combineAge = state.phase === PHASE.COMBINE
+    ? Math.max(0, CONFIG.combineDuration - (state.phaseTime || 0))
+    : 0;
+  const alignment = state.phase === PHASE.COMBINE
+    ? easeInOutCubic(clamp((combineAge - 0.24) / 0.25, 0, 1))
+    : state.lock ? 1 : 0;
+  return Object.freeze({ active, inserting, insertion, alignment });
 }
 
 export function classicAttackVisualPlan(state) {
@@ -255,8 +478,9 @@ export function classicCoreVisualPlan(state, now = 0) {
   const openAge = state.phase === PHASE.CORE_OPEN
     ? Math.max(0, duration - (state.phaseTime || 0))
     : open ? 1 : 0;
+  const shutterAge = Math.max(0, openAge - 0.085);
   const exposure = open
-    ? clamp(1 - Math.exp(-18 * openAge) * Math.cos(25 * openAge), 0, 1.08)
+    ? clamp(1 - Math.exp(-26 * shutterAge) * Math.cos(30 * shutterAge), 0, 1.08)
     : 0;
   const impact = state.visual?.impact;
   const hitAge = impact?.tone === "core"
@@ -270,6 +494,7 @@ export function classicCoreVisualPlan(state, now = 0) {
     anchor: classicCoreScreenAnchor(state, now),
     open,
     openAge,
+    shutterAge,
     exposure,
     hitAge,
     radius: Math.max(0, 22 * exposure * pulse * (1 - hitCompression * 0.28)),
@@ -455,6 +680,7 @@ function drawExploreWarning(ctx, state) {
 function drawKilnTarget(ctx, state, now, art) {
   if (!state.lock) return;
   const target = projectWorld(state.lock.zone);
+  const lockVisual = classicLockVisualPlan(state);
   const striking = state.phase === PHASE.PREDICTION;
   const resolved = state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR;
   const pulse = 0.6 + Math.sin(now * 12) * 0.15;
@@ -486,10 +712,24 @@ function drawKilnTarget(ctx, state, now, art) {
       ctx.restore();
     }
   }
+  if (!resolved && lockVisual.age <= 0.2) {
+    ctx.save();
+    ctx.globalAlpha = 1 - lockVisual.ring;
+    ctx.strokeStyle = COLORS.porcelainLight;
+    ctx.lineWidth = 7 - lockVisual.ring * 4;
+    ellipse(
+      ctx,
+      target,
+      rx * mix(0.72, 1.28, lockVisual.ring),
+      ry * mix(0.72, 1.28, lockVisual.ring),
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
   drawImagePart(ctx, art, art?.images?.relics, CLASSIC_RELIC_PARTS.lock, target, {
     anchor: "root",
-    scaleX: 1.08,
-    scaleY: 0.78,
+    scaleX: 1.08 * lockVisual.scale,
+    scaleY: 0.78 * lockVisual.scale,
     alpha: resolved ? 0.42 : 0.92,
   });
   ctx.restore();
@@ -602,7 +842,10 @@ function drawMemoryRack(ctx, state, base, now, art) {
   for (let index = 0; index < 3; index += 1) {
     const side = filled[index];
     const x = base.x + (index - 1) * 37;
-    const wobble = combining && side ? Math.sin(now * 18 + index) * 1.5 : 0;
+    const memoryMotion = classicMemoryMotionPlan(state, index, filled.length);
+    const wobble = state.phase === PHASE.COMBINE && side
+      ? Math.sin(now * 18 + index) * 1.5 * (1 - memoryMotion.alignment)
+      : 0;
     ctx.fillStyle = "#100d0b";
     roundedRect(ctx, x - 18, base.y - 166, 36, 48, 4);
     ctx.fill();
@@ -610,7 +853,44 @@ function drawMemoryRack(ctx, state, base, now, art) {
     ctx.lineWidth = 1;
     ctx.stroke();
     if (side) {
-      const plaque = { x: x + wobble, y: base.y - 143 };
+      const slot = {
+        x: mix(x, base.x + (index - 1) * 34, memoryMotion.alignment),
+        y: base.y - 143 - memoryMotion.alignment * (index === 1 ? 5 : 1),
+      };
+      let plaque = { x: slot.x + wobble, y: slot.y };
+      let plaqueScale = 0.78;
+      let plaqueScaleY = 0.88;
+      let plaqueRotation = side === "left" ? -0.13 : 0.13;
+      if (memoryMotion.inserting && state.visual.escapeMarker) {
+        const start = projectWorld(state.visual.escapeMarker);
+        plaque = pointAlong(start, slot, memoryMotion.insertion);
+        plaque.y -= Math.sin(memoryMotion.insertion * Math.PI) * 48;
+        plaque.x += (side === "left" ? -1 : 1)
+          * Math.sin(memoryMotion.insertion * Math.PI)
+          * 54;
+        plaqueScale = mix(0.46, 0.78, memoryMotion.insertion);
+        plaqueScaleY = mix(0.52, 0.88, memoryMotion.insertion);
+        plaqueRotation = mix(
+          side === "left" ? -0.48 : 0.48,
+          side === "left" ? -0.13 : 0.13,
+          memoryMotion.insertion,
+        );
+        ctx.save();
+        ctx.globalAlpha = 0.2 + Math.sin(memoryMotion.insertion * Math.PI) * 0.32;
+        ctx.fillStyle = COLORS.enamel;
+        ellipse(ctx, plaque, 25, 14);
+        ctx.fill();
+        ctx.globalAlpha = (1 - memoryMotion.insertion) * 0.76;
+        ctx.strokeStyle = "rgba(7,6,5,.82)";
+        ctx.lineWidth = 9;
+        line(ctx, start, plaque);
+        ctx.stroke();
+        ctx.strokeStyle = COLORS.enamelLight;
+        ctx.lineWidth = 4;
+        line(ctx, start, plaque);
+        ctx.stroke();
+        ctx.restore();
+      }
       const usedArt = drawImagePart(
         ctx,
         art,
@@ -619,13 +899,23 @@ function drawMemoryRack(ctx, state, base, now, art) {
         plaque,
         {
           anchor: "root",
-          rotation: side === "left" ? -0.13 : 0.13,
-          scaleX: 0.78,
-          scaleY: 0.88,
+          rotation: plaqueRotation,
+          scaleX: plaqueScale,
+          scaleY: plaqueScaleY,
           alpha: combining ? 1 : 0.9,
         },
       );
       if (!usedArt) drawMemorySlab(ctx, plaque.x, plaque.y, side, combining);
+      if (memoryMotion.inserting && memoryMotion.insertion >= 0.7) {
+        const settle = clamp((memoryMotion.insertion - 0.7) / 0.3, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = 1 - settle;
+        ctx.strokeStyle = COLORS.brassLight;
+        ctx.lineWidth = 4 - settle * 2;
+        ellipse(ctx, slot, 14 + settle * 18, 8 + settle * 8);
+        ctx.stroke();
+        ctx.restore();
+      }
       if (usedArt) {
         ctx.save();
         ctx.translate(plaque.x, plaque.y + 1);
@@ -639,10 +929,21 @@ function drawMemoryRack(ctx, state, base, now, art) {
   }
 
   if (combining && state.predictedSide) {
+    const tension = state.phase === PHASE.COMBINE
+      ? classicMemoryMotionPlan(state, 2, filled.length).alignment
+      : 1;
+    if (tension <= 0.01) {
+      ctx.restore();
+      return;
+    }
     const direction = state.predictedSide === "left" ? -1 : 1;
     ctx.strokeStyle = COLORS.brassLight;
-    ctx.lineWidth = 4;
-    line(ctx, { x: base.x, y: base.y - 119 }, { x: base.x + direction * 62, y: base.y - 105 });
+    ctx.lineWidth = mix(2, 4, tension);
+    line(
+      ctx,
+      { x: base.x, y: base.y - 119 },
+      { x: base.x + direction * 62 * tension, y: base.y - 119 + 14 * tension },
+    );
     ctx.stroke();
   }
   ctx.restore();
@@ -651,7 +952,7 @@ function drawMemoryRack(ctx, state, base, now, art) {
 function drawPileDriver(ctx, from, target, embedded, intensity) {
   const direction = vector(from, target);
   const normal = perpendicular(direction, 1);
-  const reach = Math.max(42, direction.length - 10);
+  const reach = direction.length;
   const end = { x: from.x + direction.x * reach, y: from.y + direction.y * reach };
   const railStart = { x: from.x + normal.x * 23, y: from.y + normal.y * 23 };
   const railEnd = { x: end.x + normal.x * 23, y: end.y + normal.y * 23 };
@@ -789,8 +1090,11 @@ function drawDriver(ctx, from, target, embedded, intensity, art) {
     || drawPileDriver(ctx, from, target, embedded, intensity);
 }
 
-function drawBraceArm(ctx, from, ground) {
-  const elbow = pointAlong(from, ground, 0.48);
+function drawBraceArm(ctx, from, ground, load = 0) {
+  const direction = vector(from, ground);
+  const bend = perpendicular(direction, 26 * load);
+  const elbowBase = pointAlong(from, ground, 0.48);
+  const elbow = { x: elbowBase.x + bend.x, y: elbowBase.y + bend.y };
   ctx.save();
   ctx.strokeStyle = COLORS.iron;
   ctx.lineWidth = 22;
@@ -807,8 +1111,35 @@ function drawBraceArm(ctx, from, ground) {
   ellipse(ctx, elbow, 15, 12);
   ctx.fill();
   ctx.stroke();
+  if (load < -0.05) {
+    const compression = clamp(-load, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = 0.38 + compression * 0.54;
+    ctx.strokeStyle = COLORS.brassLight;
+    ctx.lineWidth = 3 + compression * 3;
+    ellipse(ctx, ground, 16 + compression * 14, 6 + compression * 7);
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.porcelainLight;
+    ctx.lineWidth = 3;
+    lines(ctx, [
+      [
+        { x: elbow.x - direction.x * 6, y: elbow.y - direction.y * 6 },
+        { x: elbow.x - direction.x * 22, y: elbow.y - direction.y * 22 },
+      ],
+      [
+        { x: ground.x - 9, y: ground.y - 7 },
+        { x: ground.x - 20, y: ground.y - 15 },
+      ],
+    ]);
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.fillStyle = "#17130f";
-  ctx.fillRect(ground.x - 18, ground.y - 7, 36, 14);
+  ctx.save();
+  ctx.translate(ground.x, ground.y);
+  ctx.rotate(Math.atan2(direction.y, direction.x) + load * 0.08);
+  ctx.fillRect(-18, -7, 36, 14);
+  ctx.restore();
   ctx.restore();
 }
 
@@ -1063,28 +1394,12 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, seconda
 }
 
 function drawBoss(ctx, state, now, art, dynamics = null) {
-  const base = projectWorld(state.boss);
-  // The small stabilizer reads exploration lanes. The heavy pile-driver remains
-  // visibly stowed until LOCK commits it to a fixed plate, keeping the player
-  // and the live floor warning unobscured during sampling.
-  const target = state.lock
-    ? projectWorld(state.lock.zone)
-    : projectWorld({ x: state.boss.x + 154, y: state.boss.y + 116 });
+  const motion = classicBossMotionPlan(state, now);
+  const { base, target, direction, bodyBase } = motion;
   const locked = Boolean(state.lock);
-  const resolved = state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR;
-  const direction = target.x >= base.x ? 1 : -1;
-  // A miss is not a generic glow state: the pile-driver stays buried while its
-  // overextension drags the low furnace body sideways and pulls its shutters.
   const dynamicsKick = dynamics?.springValue(1) || 0;
-  const tilt = resolved ? direction * 0.27 : locked ? direction * 0.035 : 0;
-  const shake = state.visual.shake ? Math.sin(now * 85) * state.visual.shake * 14 : 0;
-  const bodyBase = {
-    x: base.x + shake + (resolved ? direction * 29 : 0),
-    y: base.y + (resolved ? 27 : 0),
-  };
-  const shoulder = { x: bodyBase.x + direction * 58, y: bodyBase.y - 112 };
   const braceStart = { x: bodyBase.x - direction * 60, y: bodyBase.y - 82 };
-  const braceGround = { x: bodyBase.x - direction * 132, y: bodyBase.y + 30 };
+  const braceGround = { x: base.x - direction * 132, y: base.y + 30 };
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,.56)";
@@ -1092,22 +1407,30 @@ function drawBoss(ctx, state, now, art, dynamics = null) {
   ctx.fill();
   ctx.restore();
 
-  drawBraceArm(ctx, braceStart, braceGround);
-  const pile = drawDriver(ctx, shoulder, target, resolved, state.visual.shake || 0, art);
+  drawBraceArm(ctx, braceStart, braceGround, motion.braceLoad);
+  const pile = drawDriver(
+    ctx,
+    motion.shoulder,
+    motion.driverHead,
+    motion.contact,
+    state.visual.shake || 0,
+    art,
+  );
   const authoredBody = drawAuthoredFurnaceBody(
     ctx,
     state,
     bodyBase,
-    tilt,
+    motion.bodyTilt,
     now,
     pile,
     art,
     dynamicsKick,
   );
-  if (!authoredBody) drawFurnaceBody(ctx, state, bodyBase, tilt, now, pile);
+  if (!authoredBody) drawFurnaceBody(ctx, state, bodyBase, motion.bodyTilt, now, pile);
   drawMemoryRack(ctx, state, bodyBase, now, art);
 
   const sight = { x: bodyBase.x + direction * 23, y: bodyBase.y - 145 };
+  const fixedSight = { x: base.x + direction * 23, y: base.y - 145 };
   ctx.save();
   if (!authoredBody) {
     ctx.fillStyle = "#17120f";
@@ -1118,14 +1441,25 @@ function drawBoss(ctx, state, now, art, dynamics = null) {
     ctx.stroke();
   }
   if (locked) {
+    ctx.globalAlpha = 0.72 + motion.cableTension * 0.28;
+    ctx.strokeStyle = "rgba(9,7,6,.9)";
+    ctx.lineWidth = 7;
+    line(ctx, fixedSight, target);
+    ctx.stroke();
     ctx.strokeStyle = COLORS.rustBright;
-    ctx.lineWidth = 2.5;
-    line(ctx, sight, target);
+    ctx.lineWidth = 3;
+    line(ctx, fixedSight, target);
     ctx.stroke();
     ctx.strokeStyle = "rgba(224,186,117,.66)";
     ctx.lineWidth = 1;
-    line(ctx, { x: sight.x + direction * 4, y: sight.y + 4 }, { x: target.x, y: target.y });
+    line(ctx, { x: fixedSight.x + direction * 4, y: fixedSight.y + 4 }, target);
     ctx.stroke();
+    if (Math.hypot(sight.x - fixedSight.x, sight.y - fixedSight.y) > 1) {
+      ctx.strokeStyle = COLORS.brassLight;
+      ctx.lineWidth = 4;
+      line(ctx, sight, fixedSight);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -1415,7 +1749,11 @@ export function classicFirstRunGuidanceStage(state) {
   ) {
     return "opposite";
   }
-  if (state.phase === PHASE.CORE_OPEN && state.stats?.coreHits === 0) return "core";
+  if (state.phase === PHASE.CORE_OPEN && state.stats?.coreHits === 0) {
+    const duration = timingForRound(Number.isFinite(state.round) ? state.round : 1).coreOpen;
+    const openAge = Math.max(0, duration - (state.phaseTime || 0));
+    if (openAge >= 0.09) return "core";
+  }
   return null;
 }
 
@@ -1542,6 +1880,7 @@ export function createRenderer(canvas) {
       dpr: 1,
       particles: 0,
       visualPhysics: "spring-ballistic",
+      bossMotion: "locked-axis-keypose",
     },
     onStatusChange: null,
   };

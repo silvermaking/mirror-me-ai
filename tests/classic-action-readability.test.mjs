@@ -95,5 +95,8 @@ test("first-run guidance follows the physical cause instead of preceding it", ()
 
   state.phase = PHASE.CORE_OPEN;
   state.boss.coreOpen = true;
+  state.phaseTime = timingForRound(1).coreOpen;
+  assert.equal(classicFirstRunGuidanceStage(state), null);
+  state.phaseTime -= 0.1;
   assert.equal(classicFirstRunGuidanceStage(state), "core");
 });

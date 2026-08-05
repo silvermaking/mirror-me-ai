@@ -182,7 +182,7 @@ function processEvents(events) {
     const key = `${event.id}:${event.type}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    audio.play(event.type);
+    audio.play(event);
     const nextAnnouncement = eventAnnouncement(event);
     const priority = eventAnnouncementPriority(event.type);
     if (nextAnnouncement && priority > announcementPriority) {
