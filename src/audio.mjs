@@ -1,5 +1,5 @@
-const cue = (frequency, endFrequency, duration, wave, volume, delay = 0) =>
-  Object.freeze({ frequency, endFrequency, duration, wave, volume, delay });
+const cue = (frequency, endFrequency, duration, wave, volume, delay = 0, role = "tone") =>
+  Object.freeze({ frequency, endFrequency, duration, wave, volume, delay, role });
 
 const CUES = Object.freeze({
   start: [cue(180, 142, 0.08, "triangle", 0.035)],
@@ -19,25 +19,31 @@ const CUES = Object.freeze({
     cue(920, 650, 0.055, "triangle", 0.025, 0.045),
   ],
   prediction_strike: [
-    cue(162, 82, 0.31, "sawtooth", 0.035),
-    cue(52, 46, 0.25, "sine", 0.026, 0.08),
+    cue(210, 118, 0.28, "sawtooth", 0.032, 0, "driver-tension"),
+    cue(58, 46, 0.24, "sine", 0.024, 0.055, "counterweight-load"),
+    cue(1180, 690, 0.05, "triangle", 0.025, 0.17, "lock-latch"),
   ],
   outsmart: [
-    cue(78, 48, 0.2, "square", 0.045),
-    cue(520, 980, 0.25, "triangle", 0.038, 0.055),
+    cue(112, 54, 0.12, "square", 0.05, 0, "empty-plate"),
+    cue(390, 1040, 0.24, "triangle", 0.038, 0.065, "core-open"),
+    cue(72, 48, 0.2, "sine", 0.025, 0.09, "chassis-collapse"),
   ],
   outsmart_confirmed: [cue(920, 1180, 0.13, "sine", 0.035)],
   prediction_neutral: [cue(410, 320, 0.11, "sine", 0.025)],
   evade_unlearned: [cue(410, 320, 0.11, "sine", 0.025)],
   read: [cue(92, 54, 0.24, "sawtooth", 0.05)],
-  attack: [cue(620, 170, 0.15, "sawtooth", 0.021)],
+  attack: [
+    cue(920, 180, 0.14, "sawtooth", 0.023, 0, "blade-whoosh"),
+    cue(1480, 620, 0.07, "triangle", 0.012, 0.018, "blade-edge"),
+  ],
   armor_hit: [
     cue(145, 92, 0.09, "square", 0.032),
     cue(1260, 720, 0.045, "triangle", 0.022),
   ],
   core_hit: [
-    cue(860, 1240, 0.09, "triangle", 0.052),
-    cue(94, 48, 0.16, "square", 0.04),
+    cue(1260, 820, 0.055, "triangle", 0.052, 0, "sword-contact"),
+    cue(96, 44, 0.2, "square", 0.044, 0.028, "core-compression"),
+    cue(420, 190, 0.11, "sine", 0.025, 0.085, "shell-recoil"),
   ],
   player_hit: [cue(72, 46, 0.18, "sawtooth", 0.055)],
   core_close: [

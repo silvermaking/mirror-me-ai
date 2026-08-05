@@ -3,10 +3,14 @@ import test from "node:test";
 
 import { PHASE, createGameState } from "../src/game-core.mjs";
 import {
+  classicAuthoredBladePlan,
   classicBladeContactPlan,
+  classicBraceArticulationPlan,
   classicCoreScreenAnchor,
   classicDriverContact,
   classicImpactScreenAnchor,
+  classicPlayerGroundingPlan,
+  projectWorld,
 } from "../src/render-classic.mjs";
 
 function coreContactState() {
@@ -45,6 +49,47 @@ test("classic direct-hit sword tip, core and impact share one screen anchor", ()
   const closeCore = classicCoreScreenAnchor(closeState, now);
   const closeBlade = classicBladeContactPlan(closeState, now);
   assert.ok(Math.hypot(closeBlade.tip.x - closeCore.x, closeBlade.tip.y - closeCore.y) <= 1e-6);
+});
+
+test("authored blade maps its real grip and tip onto the contact plan within one pixel", () => {
+  const state = coreContactState();
+  const blade = classicBladeContactPlan(state, 2.4);
+  const authored = classicAuthoredBladePlan(state, 2.4);
+  assert.ok(authored);
+  assert.ok(Math.hypot(authored.at.x - blade.hand.x, authored.at.y - blade.hand.y) <= 1);
+  assert.ok(Math.hypot(authored.tip.x - blade.tip.x, authored.tip.y - blade.tip.y) <= 1);
+  assert.ok(authored.error <= 1);
+});
+
+test("authored brace links preserve shoulder, elbow and ground anchors", () => {
+  for (const load of [-1, 0, 1]) {
+    const plan = classicBraceArticulationPlan(
+      { x: 712, y: 284 },
+      { x: 544, y: 447 },
+      load,
+    );
+    assert.ok(plan.upper && plan.lower);
+    assert.ok(plan.upper.error <= 1);
+    assert.ok(plan.lower.error <= 1);
+    assert.ok(Math.hypot(plan.upper.end.x - plan.elbow.x, plan.upper.end.y - plan.elbow.y) <= 1);
+    assert.ok(Math.hypot(plan.lower.end.x - plan.ground.x, plan.lower.end.y - plan.ground.y) <= 1);
+  }
+});
+
+test("gameplay, foot, contact marker and shadow share one exact player anchor", () => {
+  const state = coreContactState();
+  const projected = projectWorld(state.player);
+  const grounding = classicPlayerGroundingPlan(state);
+  for (const anchor of [
+    grounding.gameplay,
+    grounding.foot,
+    grounding.contactMarker,
+    grounding.shadow,
+  ]) {
+    const logicalError = Math.hypot(anchor.x - projected.x, anchor.y - projected.y);
+    assert.ok(logicalError <= 1, `${logicalError}px exceeds desktop grounding tolerance`);
+    assert.ok(logicalError * 0.25 <= 1, `${logicalError * 0.25}px exceeds 320 grounding tolerance`);
+  }
 });
 
 test("classic LOCK driver contact does not alter the target coordinate", () => {

@@ -34,8 +34,18 @@ function allParts() {
 }
 
 test("classic cutout contract uses five local SVG assets and reuses relics", () => {
-  assert.equal(CLASSIC_ART_VERSION, 1);
+  assert.equal(CLASSIC_ART_VERSION, 2);
   assert.equal(Object.keys(CLASSIC_ART_ASSETS).length, CLASSIC_ART_LIMITS.maxAssetFiles);
+  assert.deepEqual(CLASSIC_ART_ASSETS.player, {
+    file: "assets/2d/classic/player-cloak.svg",
+    width: 512,
+    height: 128,
+  });
+  assert.deepEqual(CLASSIC_ART_ASSETS.driver, {
+    file: "assets/2d/classic/driver-parts.svg",
+    width: 768,
+    height: 192,
+  });
   assert.deepEqual(CLASSIC_ART_ASSETS.relics, {
     file: "assets/2d/sprites/relics.svg",
     width: 240,
@@ -47,6 +57,65 @@ test("classic cutout contract uses five local SVG assets and reuses relics", () 
     assert.match(asset.file, /\.svg$/);
     assert.doesNotMatch(asset.file, /(?:\.webp|\.png|\.blend)$/i);
   }
+});
+
+test("animation identity sheets expose the locked articulated components", () => {
+  assert.deepEqual(CLASSIC_ART_PARTS.player.cloak, {
+    id: "player-cloak",
+    sourceRect: [0, 0, 128, 128],
+    anchors: { hip: [66, 48], foot: [66, 113] },
+  });
+  assert.deepEqual(CLASSIC_ART_PARTS.player.body, {
+    id: "player-body",
+    sourceRect: [128, 0, 96, 128],
+    anchors: { foot: [48, 116], shoulder: [48, 43], hip: [48, 76] },
+  });
+  assert.deepEqual(CLASSIC_ART_PARTS.player.rearArm, {
+    id: "player-rear-arm",
+    sourceRect: [224, 0, 80, 96],
+    anchors: { shoulder: [15, 24], hand: [67, 76] },
+  });
+  assert.deepEqual(CLASSIC_ART_PARTS.player.swordArm, {
+    id: "player-sword-arm",
+    sourceRect: [304, 0, 96, 96],
+    anchors: { shoulder: [14, 27], grip: [82, 64] },
+  });
+  assert.deepEqual(CLASSIC_ART_PARTS.player.blade, {
+    id: "player-blade",
+    sourceRect: [400, 0, 112, 64],
+    anchors: { grip: [10, 32], tip: [105, 26] },
+  });
+
+  assert.deepEqual(CLASSIC_ART_PARTS.driver.braceUpper, {
+    id: "brace-upper",
+    sourceRect: [512, 0, 128, 96],
+    anchors: { shoulder: [16, 48], elbow: [112, 52] },
+  });
+  assert.deepEqual(CLASSIC_ART_PARTS.driver.braceLower, {
+    id: "brace-lower",
+    sourceRect: [640, 0, 128, 96],
+    anchors: { elbow: [16, 44], ground: [111, 80] },
+  });
+
+  assert.deepEqual(CLASSIC_ART_PARTS.boss.coreRim, {
+    id: "core-rim",
+    sourceRect: [400, 96, 80, 96],
+    anchors: { root: [40, 48] },
+  });
+  assert.deepEqual(CLASSIC_ART_PARTS.boss.coreFace, {
+    id: "core-face",
+    sourceRect: [480, 96, 80, 96],
+    anchors: { root: [40, 48] },
+  });
+  assert.deepEqual(CLASSIC_ART_PARTS.boss.coreFins, {
+    id: "core-fins",
+    sourceRect: [560, 96, 80, 96],
+    anchors: { root: [40, 48] },
+  });
+
+  assert.equal(CLASSIC_ART_LIMITS.maxRawBytes, 160 * 1024);
+  assert.equal(CLASSIC_ART_LIMITS.maxSteadyDrawImages, 24);
+  assert.equal(CLASSIC_ART_LIMITS.maxImpactDrawImages, 32);
 });
 
 test("authored SVGs are compact editable paths with no external or executable content", async () => {

@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <title>Boundary duelist — authored cobalt cloak cutout</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128" width="512" height="128">
+  <title>Boundary duelist — articulated cobalt cutouts</title>
   <g id="player-cloak" data-source-rect="0 0 128 128" data-pivot-hip="66 48" data-pivot-foot="66 113">
     <path d="M69 45 C58 42 48 46 39 55 C29 65 19 72 6 76 L23 84 L10 94 L34 96 L26 108 L51 102 L62 115 L77 102 L88 76 L84 56 Z" fill="#0b1738" stroke="#050b1c" stroke-width="5" stroke-linejoin="round"/>
     <path d="M67 48 C56 47 49 51 42 59 C33 68 25 73 15 77 L35 82 L22 91 L45 89 L36 101 L57 94 L64 107 L73 95 L81 74 L79 56 Z" fill="#254a9b"/>
@@ -9,5 +9,41 @@
     <path d="M63 44 L68 37 L76 39 L82 52 L76 62 L67 58 Z" fill="#101f49" stroke="#050b1c" stroke-width="3" stroke-linejoin="round"/>
     <path d="M58 46 L66 48 L60 57 L52 55 Z" fill="#ba9d57" stroke="#453719" stroke-width="2"/>
     <circle cx="66" cy="48" r="4" fill="#09142f" stroke="#d5b765" stroke-width="2"/>
+  </g>
+
+  <g id="player-body" data-source-rect="128 0 96 128" data-pivot-foot="48 116" data-pivot-shoulder="48 43" data-pivot-hip="48 76">
+    <path d="M160 73 L149 91 L151 113 L163 121 L174 113 L181 121 L199 115 L202 91 L191 73 Z" fill="#08132f" stroke="#050a19" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M154 54 L164 40 L188 39 L200 55 L195 82 L186 94 L162 91 L151 78 Z" fill="#234895" stroke="#07142f" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M160 59 L175 48 L192 56 L190 78 L181 88 L165 84 L157 74 Z" fill="#3768c3"/>
+    <path d="M158 78 L173 73 L190 80 L186 94 L163 91 Z" fill="#0d1d48" stroke="#527ee0" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M158 41 L160 18 L171 8 L188 11 L198 23 L194 42 L184 51 L170 50 Z" fill="#0c1b42" stroke="#050a18" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M166 20 L176 13 L188 18 L193 29 L188 41 L176 46 L165 39 L162 29 Z" fill="#fff9e8" stroke="#4f4638" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M154 65 L165 68 L174 64 L186 70 L198 65" fill="none" stroke="#c4a45b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M155 102 L165 102 L163 117 L151 117 Z M183 102 L196 104 L198 117 L183 117 Z" fill="#11151d" stroke="#05070a" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+
+  <g id="player-rear-arm" data-source-rect="224 0 80 96" data-pivot-shoulder="15 24" data-pivot-hand="67 76">
+    <path d="M229 17 L241 10 L254 17 L259 31 L272 42 L283 59 L297 68 L300 82 L290 91 L276 84 L269 70 L255 60 L244 46 L231 39 L225 28 Z" fill="#0a1738" stroke="#050a1b" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M238 18 L249 21 L253 34 L266 46 L276 62 L287 68 L289 78 L281 81 L273 68 L261 59 L249 45 L238 39 L232 29 Z" fill="#2f5eb4"/>
+    <path d="M278 62 L293 66 L300 76 L293 88 L280 84 L273 73 Z" fill="#d8caa8" stroke="#4e4435" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M245 29 L253 34 L249 43 L239 39 Z M266 51 L276 62 L271 69 L260 59 Z" fill="#162d65"/>
+    <path d="M282 73 L291 70 L296 78 L290 84 L281 81 Z" fill="#fff7e4"/>
+  </g>
+
+  <g id="player-sword-arm" data-source-rect="304 0 96 96" data-pivot-shoulder="14 27" data-pivot-grip="82 64">
+    <path d="M309 19 L322 12 L337 19 L342 32 L357 36 L374 46 L390 52 L398 64 L392 78 L377 80 L366 68 L349 62 L334 50 L318 45 L307 36 Z" fill="#0b183a" stroke="#050a1b" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M318 21 L330 22 L336 35 L351 40 L367 51 L384 56 L390 64 L384 71 L372 66 L360 58 L344 54 L331 43 L318 40 L312 31 Z" fill="#315fae"/>
+    <path d="M365 48 L384 51 L397 61 L394 75 L383 82 L370 72 L364 60 Z" fill="#d9cbab" stroke="#4d4334" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M377 59 L389 57 L396 65 L390 74 L379 72 L373 65 Z" fill="#fff8e8"/>
+    <path d="M329 33 L339 36 L334 47 L322 42 Z M350 45 L365 51 L360 59 L345 53 Z" fill="#172e65"/>
+    <path d="M385 61 L398 61 L399 68 L386 70 Z" fill="#b99b55" stroke="#473719" stroke-width="2"/>
+  </g>
+
+  <g id="player-blade" data-source-rect="400 0 112 64" data-pivot-grip="10 32" data-pivot-tip="105 26">
+    <path d="M402 24 L417 24 L423 18 L429 25 L423 32 L430 39 L423 46 L417 39 L402 40 Z" fill="#30291f" stroke="#100d09" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M410 27 L454 23 L465 16 L475 21 L486 12 L495 19 L507 16 L499 27 L507 34 L491 32 L481 41 L470 34 L458 43 L448 35 L410 37 Z" fill="#fffbed" stroke="#171514" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M418 30 L454 27 L465 21 L474 26 L486 18 L495 23 L500 21" fill="none" stroke="#d3b562" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M431 25 L438 36 M458 23 L465 35 M481 18 L489 31" fill="none" stroke="#a39a88" stroke-width="2"/>
+    <path d="M405 19 L414 19 L418 26 L414 44 L405 44 L401 35 Z" fill="#b99750" stroke="#3f3018" stroke-width="2.5" stroke-linejoin="round"/>
   </g>
 </svg>

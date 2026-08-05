@@ -51,4 +51,27 @@
     <path d="M588 64 L598 60 L611 63 L604 71 L592 70 Z" fill="#050607"/>
     <circle cx="600" cy="84" r="6" fill="#25231e" stroke="#c3a560" stroke-width="2.5"/>
   </g>
+
+  <g id="core-rim" data-source-rect="400 96 80 96" data-pivot-root="40 48">
+    <path d="M440 101 L457 106 L469 119 L476 139 L472 158 L460 176 L443 188 L424 181 L410 167 L404 147 L408 126 L421 110 Z M440 119 L427 124 L420 139 L423 154 L435 165 L449 162 L459 150 L460 136 L452 124 Z" fill="#090b0c" fill-rule="evenodd" stroke="#050607" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M422 113 L432 107 L438 120 L429 126 Z M458 113 L468 125 L458 132 L451 122 Z M466 157 L456 173 L448 163 L455 151 Z M429 176 L415 164 L424 155 L435 165 Z" fill="#403522" stroke="#a38349" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M419 133 L424 120 L438 114 L453 120 L462 134 L461 150 L451 164 L436 169 L423 159 L416 146 Z" fill="none" stroke="#c29d58" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+
+  <g id="core-face" data-source-rect="480 96 80 96" data-pivot-root="40 48">
+    <path d="M520 113 L538 118 L550 132 L552 149 L544 165 L529 177 L511 174 L496 163 L489 146 L494 128 L506 117 Z" fill="#fffdf2" stroke="#5e513c" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M519 122 L532 126 L542 137 L543 149 L536 159 L526 168 L514 166 L504 158 L499 146 L503 134 L510 126 Z" fill="#fff9dc"/>
+    <path d="M505 126 L514 136 L511 149 L500 154 M535 128 L526 138 L530 151 L541 157 M513 166 L520 153 L527 168" fill="none" stroke="#d7b866" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M520 129 L528 135 L529 146 L523 155 L514 153 L509 144 L512 135 Z" fill="#ffffff"/>
+  </g>
+
+  <g id="core-fins" data-source-rect="560 96 80 96" data-pivot-root="40 48">
+    <path d="M600 99 L609 116 L604 130 L596 130 L591 115 Z" fill="#b08c4c" stroke="#302619" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M637 126 L621 136 L607 133 L605 125 L620 117 Z" fill="#d0b16a" stroke="#302619" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M630 176 L613 166 L608 152 L616 148 L631 159 Z" fill="#9c783f" stroke="#302619" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M596 189 L590 171 L596 158 L605 159 L610 175 Z" fill="#d5b66d" stroke="#302619" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M562 163 L578 153 L592 156 L594 165 L579 174 Z" fill="#98733d" stroke="#302619" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M568 122 L585 132 L591 145 L583 151 L568 140 Z" fill="#c8a45d" stroke="#302619" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M600 126 L614 133 L619 146 L614 160 L600 168 L586 161 L580 147 L586 134 Z" fill="none" stroke="#e2c779" stroke-width="3" stroke-linejoin="round"/>
+  </g>
 </svg>

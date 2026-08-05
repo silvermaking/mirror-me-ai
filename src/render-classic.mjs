@@ -5,6 +5,10 @@ import {
   CLASSIC_ART_PARTS,
   CLASSIC_RELIC_PARTS,
 } from "./classic-art-contract.mjs";
+import {
+  classicCoreReactionPlan,
+  classicPlayerPosePlan,
+} from "./classic-choreography.mjs";
 import { createVisualDynamics } from "./visual-dynamics.mjs";
 
 const LOGICAL_WIDTH = 1280;
@@ -43,8 +47,6 @@ const CLASSIC_ART_URLS = Object.freeze(Object.fromEntries(
     new URL(`../${asset.file}`, import.meta.url),
   ]),
 ));
-
-const ATTACK_VISUAL_DURATION = 0.24;
 
 function drawImagePart(ctx, art, image, part, at, {
   anchor = Object.keys(part.anchors)[0],
@@ -104,6 +106,16 @@ export function projectWorld(point) {
     x: VIEW.centerX + point.x * VIEW.scaleX,
     y: VIEW.centerY + point.y * VIEW.scaleY,
   };
+}
+
+export function classicPlayerGroundingPlan(state) {
+  const point = projectWorld(state.player);
+  return Object.freeze({
+    gameplay: Object.freeze({ ...point }),
+    foot: Object.freeze({ ...point }),
+    contactMarker: Object.freeze({ ...point }),
+    shadow: Object.freeze({ ...point }),
+  });
 }
 
 function clamp(value, min, max) {
@@ -168,6 +180,50 @@ function transformLocal(root, local, rotation = 0, scale = 1) {
     x: root.x + x * cosine - y * sine,
     y: root.y + x * sine + y * cosine,
   };
+}
+
+function transformedPartAnchor(at, part, fromAnchor, toAnchor, {
+  rotation = 0,
+  scaleX = 1,
+  scaleY = scaleX,
+} = {}) {
+  const from = part?.anchors?.[fromAnchor];
+  const to = part?.anchors?.[toAnchor];
+  if (!from || !to) return { ...at };
+  const localX = (to[0] - from[0]) * scaleX;
+  const localY = (to[1] - from[1]) * scaleY;
+  const cosine = Math.cos(rotation);
+  const sine = Math.sin(rotation);
+  return {
+    x: at.x + localX * cosine - localY * sine,
+    y: at.y + localX * sine + localY * cosine,
+  };
+}
+
+function linkPartPlan(part, startAnchor, endAnchor, start, end) {
+  const sourceStart = part?.anchors?.[startAnchor];
+  const sourceEnd = part?.anchors?.[endAnchor];
+  if (!sourceStart || !sourceEnd) return null;
+  const sourceX = sourceEnd[0] - sourceStart[0];
+  const sourceY = sourceEnd[1] - sourceStart[1];
+  const sourceLength = Math.max(0.001, Math.hypot(sourceX, sourceY));
+  const targetX = end.x - start.x;
+  const targetY = end.y - start.y;
+  const targetLength = Math.max(0.001, Math.hypot(targetX, targetY));
+  const rotation = Math.atan2(targetY, targetX) - Math.atan2(sourceY, sourceX);
+  const scale = targetLength / sourceLength;
+  const resolvedEnd = transformedPartAnchor(start, part, startAnchor, endAnchor, {
+    rotation,
+    scaleX: scale,
+  });
+  return Object.freeze({
+    at: Object.freeze({ ...start }),
+    anchor: startAnchor,
+    rotation,
+    scale,
+    end: Object.freeze(resolvedEnd),
+    error: Math.hypot(resolvedEnd.x - end.x, resolvedEnd.y - end.y),
+  });
 }
 
 export function classicCoreScreenAnchor(state, now = 0) {
@@ -326,7 +382,9 @@ export function classicBossMotionPlan(state, now = 0) {
   if (impact?.tone === "core" || impact?.tone === "armor") {
     const duration = impact.tone === "core" ? 0.3 : 0.24;
     const age = clamp(duration - impact.remaining, 0, duration);
-    const wave = Math.exp(-15 * age) * Math.sin(age * 42);
+    const wave = impact.tone === "core"
+      ? classicCoreReactionPlan(state).bodyKick
+      : Math.exp(-15 * age) * Math.sin(age * 42);
     const player = projectWorld(state.player || { x: 0, y: 0 });
     const push = vector(player, base);
     const strength = impact.tone === "core" ? 18 : 8;
@@ -423,52 +481,15 @@ export function classicMemoryMotionPlan(state, index, filledLength = state.memor
 }
 
 export function classicAttackVisualPlan(state) {
-  const attack = state.visual?.attack;
-  if (!attack) {
-    return Object.freeze({
-      active: false,
-      progress: 0,
-      phase: "idle",
-      contact: false,
-      angleOffset: 0,
-      bodyLean: 0,
-      trailAlpha: 0,
-    });
-  }
-
-  const progress = clamp(1 - attack.remaining / ATTACK_VISUAL_DURATION, 0, 1);
-  const resultContact = Boolean(attack.hit || attack.armor);
-  let phase = "contact";
-  let angleOffset = 0;
-  let bodyLean = 0.08;
-
-  // game-core applies HP and armor results on the input frame. The renderer
-  // therefore begins at honest contact, then makes the otherwise invisible
-  // result readable through a broad, foot-anchored follow-through.
-  if (progress <= 0.2) {
-    const amount = easeOutCubic(progress / 0.2);
-    angleOffset = 0;
-    bodyLean = 0.08 + amount * 0.05;
-  } else if (progress <= 0.7) {
-    phase = "cut";
-    const amount = easeInOutCubic((progress - 0.2) / 0.5);
-    angleOffset = mix(0.16, 1.82, amount);
-    bodyLean = mix(0.13, 0.21, amount);
-  } else {
-    phase = "recoil";
-    const amount = easeOutCubic((progress - 0.7) / 0.3);
-    angleOffset = mix(1.82, 0.88, amount);
-    bodyLean = mix(0.21, 0.04, amount);
-  }
-
+  const pose = classicPlayerPosePlan(state);
   return Object.freeze({
-    active: true,
-    progress,
-    phase,
-    contact: resultContact && progress <= 0.2,
-    angleOffset,
-    bodyLean,
-    trailAlpha: clamp(1 - progress * 0.7, 0.24, 1),
+    active: pose.active,
+    progress: pose.progress,
+    phase: pose.phase,
+    contact: pose.contact,
+    angleOffset: pose.bladeAngleOffset,
+    bodyLean: pose.bodyLean,
+    trailAlpha: pose.trailAlpha,
   });
 }
 
@@ -482,13 +503,9 @@ export function classicCoreVisualPlan(state, now = 0) {
   const exposure = open
     ? clamp(1 - Math.exp(-26 * shutterAge) * Math.cos(30 * shutterAge), 0, 1.08)
     : 0;
-  const impact = state.visual?.impact;
-  const hitAge = impact?.tone === "core"
-    ? clamp(0.3 - impact.remaining, 0, 0.3)
-    : Infinity;
-  const hitCompression = Number.isFinite(hitAge)
-    ? Math.exp(-18 * hitAge) * Math.cos(34 * hitAge)
-    : 0;
+  const reaction = classicCoreReactionPlan(state);
+  const hitAge = reaction.hitAge;
+  const hitCompression = reaction.faceCompression;
   const pulse = 1 + Math.sin(now * 13) * 0.035;
   return Object.freeze({
     anchor: classicCoreScreenAnchor(state, now),
@@ -497,8 +514,10 @@ export function classicCoreVisualPlan(state, now = 0) {
     shutterAge,
     exposure,
     hitAge,
+    hitCompression,
+    finsKick: reaction.finsKick,
     radius: Math.max(0, 22 * exposure * pulse * (1 - hitCompression * 0.28)),
-    shutterKick: Number.isFinite(hitAge) ? hitCompression * 0.11 : 0,
+    shutterKick: reaction.shutterKick * 0.11,
     reflectionAlpha: open ? clamp(0.12 + exposure * 0.24, 0, 0.38) : 0,
   });
 }
@@ -532,6 +551,27 @@ export function classicBladeContactPlan(state, now = 0) {
       y: hand.y + Math.sin(angle) * length,
     },
   };
+}
+
+function authoredBladePlanFromContact(blade) {
+  const linked = linkPartPlan(
+    CLASSIC_ART_PARTS.player?.blade,
+    "grip",
+    "tip",
+    blade.hand,
+    blade.tip,
+  );
+  if (!linked) return null;
+  return Object.freeze({
+    ...linked,
+    hand: Object.freeze({ ...blade.hand }),
+    tip: linked.end,
+    target: Object.freeze({ ...blade.tip }),
+  });
+}
+
+export function classicAuthoredBladePlan(state, now = 0) {
+  return authoredBladePlanFromContact(classicBladeContactPlan(state, now));
 }
 
 export function classicImpactScreenAnchor(state, now = 0) {
@@ -1090,11 +1130,84 @@ function drawDriver(ctx, from, target, embedded, intensity, art) {
     || drawPileDriver(ctx, from, target, embedded, intensity);
 }
 
-function drawBraceArm(ctx, from, ground, load = 0) {
+export function classicBraceArticulationPlan(from, ground, load = 0) {
   const direction = vector(from, ground);
   const bend = perpendicular(direction, 26 * load);
   const elbowBase = pointAlong(from, ground, 0.48);
   const elbow = { x: elbowBase.x + bend.x, y: elbowBase.y + bend.y };
+  return Object.freeze({
+    from: Object.freeze({ ...from }),
+    elbow: Object.freeze(elbow),
+    ground: Object.freeze({ ...ground }),
+    direction: Object.freeze(direction),
+    upper: linkPartPlan(
+      CLASSIC_ART_PARTS.driver?.braceUpper,
+      "shoulder",
+      "elbow",
+      from,
+      elbow,
+    ),
+    lower: linkPartPlan(
+      CLASSIC_ART_PARTS.driver?.braceLower,
+      "elbow",
+      "ground",
+      elbow,
+      ground,
+    ),
+  });
+}
+
+function drawBraceCompressionCue(ctx, plan, load) {
+  if (load >= -0.05) return;
+  const compression = clamp(-load, 0, 1);
+  const { direction, elbow, ground } = plan;
+  ctx.save();
+  ctx.globalAlpha = 0.38 + compression * 0.54;
+  ctx.strokeStyle = COLORS.brassLight;
+  ctx.lineWidth = 3 + compression * 3;
+  ellipse(ctx, ground, 16 + compression * 14, 6 + compression * 7);
+  ctx.stroke();
+  ctx.strokeStyle = COLORS.porcelainLight;
+  ctx.lineWidth = 3;
+  lines(ctx, [
+    [
+      { x: elbow.x - direction.x * 6, y: elbow.y - direction.y * 6 },
+      { x: elbow.x - direction.x * 22, y: elbow.y - direction.y * 22 },
+    ],
+    [
+      { x: ground.x - 9, y: ground.y - 7 },
+      { x: ground.x - 20, y: ground.y - 15 },
+    ],
+  ]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawAuthoredBraceArm(ctx, from, ground, load, art) {
+  const image = art?.images?.driver;
+  const upperPart = CLASSIC_ART_PARTS.driver?.braceUpper;
+  const lowerPart = CLASSIC_ART_PARTS.driver?.braceLower;
+  if (!image || !upperPart || !lowerPart) return false;
+  const plan = classicBraceArticulationPlan(from, ground, load);
+  if (!plan.upper || !plan.lower) return false;
+
+  drawImagePart(ctx, art, image, lowerPart, plan.lower.at, {
+    anchor: plan.lower.anchor,
+    rotation: plan.lower.rotation,
+    scaleX: plan.lower.scale,
+  });
+  drawImagePart(ctx, art, image, upperPart, plan.upper.at, {
+    anchor: plan.upper.anchor,
+    rotation: plan.upper.rotation,
+    scaleX: plan.upper.scale,
+  });
+  drawBraceCompressionCue(ctx, plan, load);
+  return true;
+}
+
+function drawProceduralBraceArm(ctx, from, ground, load = 0) {
+  const plan = classicBraceArticulationPlan(from, ground, load);
+  const { direction, elbow } = plan;
   ctx.save();
   ctx.strokeStyle = COLORS.iron;
   ctx.lineWidth = 22;
@@ -1111,29 +1224,7 @@ function drawBraceArm(ctx, from, ground, load = 0) {
   ellipse(ctx, elbow, 15, 12);
   ctx.fill();
   ctx.stroke();
-  if (load < -0.05) {
-    const compression = clamp(-load, 0, 1);
-    ctx.save();
-    ctx.globalAlpha = 0.38 + compression * 0.54;
-    ctx.strokeStyle = COLORS.brassLight;
-    ctx.lineWidth = 3 + compression * 3;
-    ellipse(ctx, ground, 16 + compression * 14, 6 + compression * 7);
-    ctx.stroke();
-    ctx.strokeStyle = COLORS.porcelainLight;
-    ctx.lineWidth = 3;
-    lines(ctx, [
-      [
-        { x: elbow.x - direction.x * 6, y: elbow.y - direction.y * 6 },
-        { x: elbow.x - direction.x * 22, y: elbow.y - direction.y * 22 },
-      ],
-      [
-        { x: ground.x - 9, y: ground.y - 7 },
-        { x: ground.x - 20, y: ground.y - 15 },
-      ],
-    ]);
-    ctx.stroke();
-    ctx.restore();
-  }
+  drawBraceCompressionCue(ctx, plan, load);
   ctx.fillStyle = "#17130f";
   ctx.save();
   ctx.translate(ground.x, ground.y);
@@ -1141,6 +1232,11 @@ function drawBraceArm(ctx, from, ground, load = 0) {
   ctx.fillRect(-18, -7, 36, 14);
   ctx.restore();
   ctx.restore();
+}
+
+function drawBraceArm(ctx, from, ground, load = 0, art = null) {
+  if (drawAuthoredBraceArm(ctx, from, ground, load, art)) return;
+  drawProceduralBraceArm(ctx, from, ground, load);
 }
 
 function drawFurnaceBody(ctx, state, base, tilt, now, pile) {
@@ -1277,6 +1373,37 @@ function drawFurnaceBody(ctx, state, base, tilt, now, pile) {
   }
 }
 
+function drawAuthoredCoreParts(ctx, coreVisual, art) {
+  const image = art?.images?.boss;
+  const rim = CLASSIC_ART_PARTS.boss?.coreRim;
+  const face = CLASSIC_ART_PARTS.boss?.coreFace;
+  const fins = CLASSIC_ART_PARTS.boss?.coreFins;
+  const exposure = clamp(coreVisual.exposure, 0, 1);
+  if (!image || !rim || !face || !fins || exposure <= 0.01) return false;
+
+  const baseScale = 0.72 * exposure;
+  drawImagePart(ctx, art, image, fins, coreVisual.anchor, {
+    anchor: "root",
+    rotation: coreVisual.finsKick * 0.46,
+    scaleX: baseScale * (1 + Math.abs(coreVisual.finsKick) * 0.1),
+    alpha: 1,
+  });
+  drawImagePart(ctx, art, image, rim, coreVisual.anchor, {
+    anchor: "root",
+    rotation: coreVisual.finsKick * -0.1,
+    scaleX: baseScale,
+    alpha: 1,
+  });
+  drawImagePart(ctx, art, image, face, coreVisual.anchor, {
+    anchor: "root",
+    rotation: coreVisual.finsKick * 0.08,
+    scaleX: baseScale * (1 - coreVisual.hitCompression * 0.14),
+    scaleY: baseScale * (1 - coreVisual.hitCompression * 0.23),
+    alpha: 1,
+  });
+  return true;
+}
+
 function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, secondaryKick = 0) {
   const image = art?.images?.boss;
   if (!image) return false;
@@ -1311,25 +1438,28 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, seconda
     ellipse(ctx, core, glowRadius, glowRadius * 0.86);
     ctx.fill();
 
-    ctx.strokeStyle = "rgba(255,245,214,.84)";
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    const crackLength = 31 * coreVisual.exposure;
-    lines(ctx, [
-      [{ x: core.x - 12, y: core.y - 8 }, { x: core.x - crackLength, y: core.y - 21 }],
-      [{ x: core.x + 13, y: core.y - 7 }, { x: core.x + crackLength, y: core.y - 19 }],
-      [{ x: core.x - 13, y: core.y + 8 }, { x: core.x - crackLength, y: core.y + 20 }],
-      [{ x: core.x + 13, y: core.y + 8 }, { x: core.x + crackLength, y: core.y + 22 }],
-    ]);
-    ctx.stroke();
+    const authoredCore = drawAuthoredCoreParts(ctx, coreVisual, art);
+    if (!authoredCore) {
+      ctx.strokeStyle = "rgba(255,245,214,.84)";
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+      const crackLength = 31 * coreVisual.exposure;
+      lines(ctx, [
+        [{ x: core.x - 12, y: core.y - 8 }, { x: core.x - crackLength, y: core.y - 21 }],
+        [{ x: core.x + 13, y: core.y - 7 }, { x: core.x + crackLength, y: core.y - 19 }],
+        [{ x: core.x - 13, y: core.y + 8 }, { x: core.x - crackLength, y: core.y + 20 }],
+        [{ x: core.x + 13, y: core.y + 8 }, { x: core.x + crackLength, y: core.y + 22 }],
+      ]);
+      ctx.stroke();
 
-    ctx.fillStyle = "#fffdf1";
-    ellipse(ctx, core, coreVisual.radius, coreVisual.radius * 0.94);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.98)";
-    ctx.lineWidth = 4;
-    ellipse(ctx, core, coreVisual.radius + 6, coreVisual.radius + 4);
-    ctx.stroke();
+      ctx.fillStyle = "#fffdf1";
+      ellipse(ctx, core, coreVisual.radius, coreVisual.radius * 0.94);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.98)";
+      ctx.lineWidth = 4;
+      ellipse(ctx, core, coreVisual.radius + 6, coreVisual.radius + 4);
+      ctx.stroke();
+    }
 
     if (Number.isFinite(coreVisual.hitAge) && coreVisual.hitAge <= 0.12) {
       const hitProgress = clamp(coreVisual.hitAge / 0.12, 0, 1);
@@ -1407,7 +1537,7 @@ function drawBoss(ctx, state, now, art, dynamics = null) {
   ctx.fill();
   ctx.restore();
 
-  drawBraceArm(ctx, braceStart, braceGround, motion.braceLoad);
+  drawBraceArm(ctx, braceStart, braceGround, motion.braceLoad, art);
   const pile = drawDriver(
     ctx,
     motion.shoulder,
@@ -1521,21 +1651,74 @@ function drawSwingTrail(ctx, state, blade) {
   ctx.restore();
 }
 
-function drawPlayer(ctx, state, now, art, dynamics = null) {
-  const point = projectWorld(state.player);
-  const boss = projectWorld(state.boss);
-  const blade = classicBladeContactPlan(state, now);
-  const angle = blade.angle;
-  const bladeLength = blade.length;
-  const blinking = state.timers.invulnerable > 0 && Math.sin(now * 40) > 0.2;
+function drawAuthoredPlayer(ctx, state, point, blade, art, dynamics, facing, blinking) {
+  const image = art?.images?.player;
+  const parts = CLASSIC_ART_PARTS.player;
+  if (!image || !parts?.cloak || !parts?.body || !parts?.rearArm || !parts?.swordArm || !parts?.blade) {
+    return false;
+  }
 
-  ctx.save();
-  ctx.globalAlpha = blinking ? 0.45 : 1;
-  ctx.fillStyle = "rgba(0,0,0,.58)";
-  ellipse(ctx, { x: point.x, y: point.y + 4 }, 20, 7);
+  const pose = classicPlayerPosePlan(state, { swingSide: blade.swingSide });
+  const movementLean = clamp(state.player.lastMove?.x || 0, -1, 1) * -0.07
+    + (dynamics?.springValue(0) || 0);
+  const dashLean = state.visual.lastDash ? facing * -0.06 : 0;
+  const locomotionLean = movementLean + dashLean;
+  const bodyRotation = locomotionLean + pose.torsoRotation;
+  const bodyScale = 0.61;
+  const bodyShoulder = transformedPartAnchor(point, parts.body, "foot", "shoulder", {
+    rotation: bodyRotation,
+    scaleX: facing * bodyScale,
+    scaleY: bodyScale,
+  });
+
+  drawImagePart(ctx, art, image, parts.cloak, point, {
+    anchor: "foot",
+    rotation: locomotionLean + pose.cloakCounterRotation,
+    scaleX: facing * bodyScale,
+    scaleY: bodyScale,
+  });
+  drawImagePart(ctx, art, image, parts.rearArm, bodyShoulder, {
+    anchor: "shoulder",
+    rotation: bodyRotation + pose.rearArmRotation,
+    scaleX: facing * 0.55,
+    scaleY: 0.55,
+  });
+
+  // Grip is the immutable visual weapon origin. The shoulder end deliberately
+  // overlaps beneath the torso so the rigid cutout keeps a clean joint while
+  // the grip remains exact through the broad follow-through.
+  drawImagePart(ctx, art, image, parts.swordArm, blade.hand, {
+    anchor: "grip",
+    rotation: locomotionLean + pose.swordArmRotation,
+    scaleX: facing * bodyScale,
+    scaleY: bodyScale,
+  });
+  drawImagePart(ctx, art, image, parts.body, point, {
+    anchor: "foot",
+    rotation: bodyRotation,
+    scaleX: facing * bodyScale,
+    scaleY: bodyScale,
+  });
+
+  const authoredBlade = authoredBladePlanFromContact(blade);
+  if (!authoredBlade) return false;
+  drawImagePart(ctx, art, image, parts.blade, authoredBlade.at, {
+    anchor: authoredBlade.anchor,
+    rotation: authoredBlade.rotation,
+    scaleX: authoredBlade.scale,
+  });
+  if (art?.metrics) art.metrics.bladeContactError = authoredBlade.error;
+
+  ctx.fillStyle = COLORS.enamelLight;
+  ellipse(ctx, point, 5, 3);
   ctx.fill();
-  drawSwingTrail(ctx, state, blade);
-  const facing = boss.x >= point.x ? 1 : -1;
+  ctx.strokeStyle = COLORS.enamel;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  return true;
+}
+
+function drawProceduralPlayer(ctx, state, point, blade, art, dynamics, facing, blinking) {
   const movementLean = clamp(state.player.lastMove?.x || 0, -1, 1) * -0.07
     + (dynamics?.springValue(0) || 0);
   const dashLean = state.visual.lastDash ? facing * -0.06 : 0;
@@ -1554,6 +1737,7 @@ function drawPlayer(ctx, state, now, art, dynamics = null) {
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
+  ctx.save();
   ctx.translate(point.x, point.y);
   ctx.rotate(attackLean);
   ctx.fillStyle = "#2b2924";
@@ -1582,20 +1766,40 @@ function drawPlayer(ctx, state, now, art, dynamics = null) {
   ctx.restore();
 
   ctx.save();
-  ctx.translate(point.x, point.y - 29);
-  ctx.rotate(angle);
+  ctx.translate(blade.hand.x, blade.hand.y);
+  ctx.rotate(blade.angle);
   ctx.strokeStyle = "rgba(9,7,6,.88)";
   ctx.lineWidth = 10;
-  line(ctx, { x: 4, y: 0 }, { x: bladeLength, y: 0 });
+  line(ctx, { x: 4, y: 0 }, { x: blade.length, y: 0 });
   ctx.stroke();
   ctx.strokeStyle = state.visual.attack?.hit ? "#fffdf0" : "#e8e0d0";
   ctx.lineWidth = 5.5;
-  line(ctx, { x: 4, y: 0 }, { x: bladeLength, y: 0 });
+  line(ctx, { x: 4, y: 0 }, { x: blade.length, y: 0 });
   ctx.stroke();
   ctx.strokeStyle = COLORS.brassLight;
   ctx.lineWidth = 2;
   line(ctx, { x: 9, y: -7 }, { x: 9, y: 7 });
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlayer(ctx, state, now, art, dynamics = null) {
+  const grounding = classicPlayerGroundingPlan(state);
+  const point = grounding.foot;
+  const boss = projectWorld(state.boss);
+  const blade = classicBladeContactPlan(state, now);
+  const blinking = state.timers.invulnerable > 0 && Math.sin(now * 40) > 0.2;
+
+  ctx.save();
+  ctx.globalAlpha = blinking ? 0.45 : 1;
+  ctx.fillStyle = "rgba(0,0,0,.58)";
+  ellipse(ctx, grounding.shadow, 20, 7);
+  ctx.fill();
+  drawSwingTrail(ctx, state, blade);
+  const facing = boss.x >= point.x ? 1 : -1;
+  if (!drawAuthoredPlayer(ctx, state, point, blade, art, dynamics, facing, blinking)) {
+    drawProceduralPlayer(ctx, state, point, blade, art, dynamics, facing, blinking);
+  }
   ctx.restore();
 }
 
@@ -1881,6 +2085,8 @@ export function createRenderer(canvas) {
       particles: 0,
       visualPhysics: "spring-ballistic",
       bossMotion: "locked-axis-keypose",
+      playerMotion: "grounded-cutout-choreography",
+      bladeContactError: null,
     },
     onStatusChange: null,
   };
@@ -1924,7 +2130,10 @@ export function createRenderer(canvas) {
     const base = projectWorld(state.boss || { x: 0, y: 0 });
     const target = state.lock?.zone ? projectWorld(state.lock.zone) : { x: base.x + 1, y: base.y };
     const bossDirection = target.x >= base.x ? 1 : -1;
-    const impactTarget = state.visual?.impact?.tone === "core" ? bossDirection * 0.14 : 0;
+    const coreReaction = classicCoreReactionPlan(state);
+    const impactTarget = coreReaction.directHit && coreReaction.hitAge >= 0.11
+      ? bossDirection * 0.14
+      : 0;
     dynamics.step(delta, [movementTarget, impactTarget]);
     renderer.info.particles = dynamics.particleCount;
   }
@@ -1968,6 +2177,7 @@ export function createRenderer(canvas) {
 
   function render(state, options = {}) {
     renderer.info.drawImages = 0;
+    renderer.info.bladeContactError = null;
     resize();
     const now = Number.isFinite(options.now) ? options.now : 0;
     updateDynamics(state, now);
