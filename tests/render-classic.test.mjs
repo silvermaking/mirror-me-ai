@@ -9,6 +9,7 @@ import {
   classicCoreScreenAnchor,
   classicDriverContact,
   classicImpactScreenAnchor,
+  classicPlayerFrontReadabilityPlan,
   classicPlayerGroundingPlan,
   projectWorld,
 } from "../src/render-classic.mjs";
@@ -89,6 +90,45 @@ test("gameplay, foot, contact marker and shadow share one exact player anchor", 
     const logicalError = Math.hypot(anchor.x - projected.x, anchor.y - projected.y);
     assert.ok(logicalError <= 1, `${logicalError}px exceeds desktop grounding tolerance`);
     assert.ok(logicalError * 0.25 <= 1, `${logicalError * 0.25}px exceeds 320 grounding tolerance`);
+  }
+});
+
+test("ready guard stays diagonal, clear of the body and foreground-readable at 320", () => {
+  for (const playerX of [-100, 0, 100]) {
+    for (const locomotionLean of [-0.2, 0, 0.2]) {
+      const state = coreContactState();
+      state.phase = PHASE.EXPLORE;
+      state.boss.coreOpen = false;
+      state.player = { ...state.player, x: playerX };
+      state.visual.attack = null;
+      state.visual.impact = null;
+      const plan = classicPlayerFrontReadabilityPlan(state, 0, { locomotionLean });
+      assert.deepEqual(plan.drawOrder, ["cloak", "rearArm", "body", "swordArm", "blade"]);
+      assert.equal(plan.ready, true);
+      assert.ok(plan.guardAngleDegrees >= 35 && plan.guardAngleDegrees <= 55);
+      assert.equal(plan.bladeOverlapsBody, false);
+      assert.ok(plan.bladeOutsideBodyCssAt320 >= 8);
+      assert.ok(plan.swordArm.scale >= 0.35 && plan.swordArm.scale <= 0.75);
+      assert.ok(plan.swordArm.error <= 1);
+    }
+  }
+});
+
+test("contact, cut and recoil keep a connected sword arm without moving foot or contact truth", () => {
+  for (const [elapsedMs, phase] of [[0, "contact"], [120, "cut"], [210, "recoil"]]) {
+    const state = coreContactState();
+    state.visual.attack.remaining = (240 - elapsedMs) / 1000;
+    const plan = classicPlayerFrontReadabilityPlan(state, 2.4);
+    assert.equal(plan.blade.motion.phase, phase);
+    assert.ok(plan.swordArm.scale >= 0.35 && plan.swordArm.scale <= 0.75);
+    assert.ok(plan.swordArm.error <= 1);
+    assert.deepEqual(classicPlayerGroundingPlan(state).foot, projectWorld(state.player));
+    if (phase === "contact") {
+      assert.ok(Math.hypot(
+        plan.blade.tip.x - plan.blade.target.x,
+        plan.blade.tip.y - plan.blade.target.y,
+      ) <= 1);
+    }
   }
 });
 

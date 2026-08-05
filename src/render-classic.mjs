@@ -6,6 +6,7 @@ import {
   CLASSIC_RELIC_PARTS,
 } from "./classic-art-contract.mjs";
 import {
+  CLASSIC_PLAYER_DRAW_ORDER,
   classicCoreReactionPlan,
   classicPlayerPosePlan,
 } from "./classic-choreography.mjs";
@@ -13,6 +14,7 @@ import { createVisualDynamics } from "./visual-dynamics.mjs";
 
 const LOGICAL_WIDTH = 1280;
 const LOGICAL_HEIGHT = 720;
+const CLASSIC_PLAYER_DRAW_ORDER_LABEL = CLASSIC_PLAYER_DRAW_ORDER.join(">");
 const VIEW = Object.freeze({
   centerX: LOGICAL_WIDTH / 2,
   centerY: 404,
@@ -224,6 +226,64 @@ function linkPartPlan(part, startAnchor, endAnchor, start, end) {
     end: Object.freeze(resolvedEnd),
     error: Math.hypot(resolvedEnd.x - end.x, resolvedEnd.y - end.y),
   });
+}
+
+function transformedPartBounds(at, part, anchor, {
+  rotation = 0,
+  scaleX = 1,
+  scaleY = scaleX,
+} = {}) {
+  const [, , width, height] = part.sourceRect;
+  const corners = [
+    [0, 0],
+    [width, 0],
+    [width, height],
+    [0, height],
+  ].map(([x, y]) => {
+    const origin = part.anchors[anchor];
+    const localX = (x - origin[0]) * scaleX;
+    const localY = (y - origin[1]) * scaleY;
+    const cosine = Math.cos(rotation);
+    const sine = Math.sin(rotation);
+    return {
+      x: at.x + localX * cosine - localY * sine,
+      y: at.y + localX * sine + localY * cosine,
+    };
+  });
+  return Object.freeze({
+    minX: Math.min(...corners.map((corner) => corner.x)),
+    maxX: Math.max(...corners.map((corner) => corner.x)),
+    minY: Math.min(...corners.map((corner) => corner.y)),
+    maxY: Math.max(...corners.map((corner) => corner.y)),
+  });
+}
+
+function segmentIntersectsBounds(from, to, bounds) {
+  let near = 0;
+  let far = 1;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const checks = [
+    [-dx, from.x - bounds.minX],
+    [dx, bounds.maxX - from.x],
+    [-dy, from.y - bounds.minY],
+    [dy, bounds.maxY - from.y],
+  ];
+  for (const [p, q] of checks) {
+    if (Math.abs(p) <= 1e-9) {
+      if (q < 0) return false;
+      continue;
+    }
+    const ratio = q / p;
+    if (p < 0) {
+      if (ratio > far) return false;
+      near = Math.max(near, ratio);
+    } else {
+      if (ratio < near) return false;
+      far = Math.min(far, ratio);
+    }
+  }
+  return true;
 }
 
 export function classicCoreScreenAnchor(state, now = 0) {
@@ -522,21 +582,42 @@ export function classicCoreVisualPlan(state, now = 0) {
   });
 }
 
-export function classicBladeContactPlan(state, now = 0) {
+export function classicBladeContactPlan(state, now = 0, { locomotionLean = 0 } = {}) {
   const point = projectWorld(state.player);
   const boss = projectWorld(state.boss);
-  const hand = { x: point.x, y: point.y - 29 };
   const target = state.boss.coreOpen ? classicCoreScreenAnchor(state, now) : boss;
+  const swingSide = target.x >= point.x ? 1 : -1;
+  const pose = classicPlayerPosePlan(state, { swingSide });
+  const bodyScale = 0.61;
+  const bodyRotation = locomotionLean + pose.torsoRotation;
+  const bodyShoulder = transformedPartAnchor(
+    point,
+    CLASSIC_ART_PARTS.player.body,
+    "foot",
+    "shoulder",
+    {
+      rotation: bodyRotation,
+      scaleX: swingSide * bodyScale,
+      scaleY: bodyScale,
+    },
+  );
+  const hand = {
+    x: bodyShoulder.x + swingSide * Math.cos(pose.handAngle) * pose.handReach,
+    y: bodyShoulder.y + Math.sin(pose.handAngle) * pose.handReach,
+  };
   const targetAngle = Math.atan2(target.y - hand.y, target.x - hand.x);
   const contactLength = Math.hypot(target.x - hand.x, target.y - hand.y);
   const motion = classicAttackVisualPlan(state);
-  const swingSide = target.x >= hand.x ? 1 : -1;
-  const angle = targetAngle + motion.angleOffset * swingSide;
+  const guardVertical = target.y < hand.y ? -1 : 1;
+  const guardAngle = Math.atan2(guardVertical, swingSide);
+  const angle = motion.active
+    ? targetAngle + motion.angleOffset * swingSide
+    : guardAngle;
   const length = motion.contact
     ? contactLength
     : state.visual.attack?.armor
       ? 43
-      : motion.active ? 54 : 43;
+      : motion.active ? 54 : 48;
   return {
     hand,
     target,
@@ -545,12 +626,54 @@ export function classicBladeContactPlan(state, now = 0) {
     length,
     contactLength,
     swingSide,
+    guardAngle,
+    bodyRotation,
+    bodyShoulder,
+    locomotionLean,
+    pose,
     motion,
     tip: {
       x: hand.x + Math.cos(angle) * length,
       y: hand.y + Math.sin(angle) * length,
     },
   };
+}
+
+export function classicPlayerFrontReadabilityPlan(state, now = 0, options = {}) {
+  const blade = classicBladeContactPlan(state, now, options);
+  const point = projectWorld(state.player);
+  const bodyPart = CLASSIC_ART_PARTS.player.body;
+  const bodyBounds = transformedPartBounds(point, bodyPart, "foot", {
+    rotation: blade.bodyRotation,
+    scaleX: blade.swingSide * 0.61,
+    scaleY: 0.61,
+  });
+  const swordArm = linkPartPlan(
+    CLASSIC_ART_PARTS.player.swordArm,
+    "shoulder",
+    "grip",
+    blade.bodyShoulder,
+    blade.hand,
+  );
+  const ready = !blade.motion.active;
+  const bladeOverlapsBody = ready
+    ? segmentIntersectsBounds(blade.hand, blade.tip, bodyBounds)
+    : false;
+  const guardAngleDegrees = Math.atan2(
+    Math.abs(Math.sin(blade.guardAngle)),
+    Math.abs(Math.cos(blade.guardAngle)),
+  ) * 180 / Math.PI;
+
+  return Object.freeze({
+    drawOrder: CLASSIC_PLAYER_DRAW_ORDER,
+    blade,
+    bodyBounds,
+    swordArm,
+    ready,
+    bladeOverlapsBody,
+    guardAngleDegrees,
+    bladeOutsideBodyCssAt320: ready && !bladeOverlapsBody ? blade.length * 0.25 : 0,
+  });
 }
 
 function authoredBladePlanFromContact(blade) {
@@ -1651,63 +1774,82 @@ function drawSwingTrail(ctx, state, blade) {
   ctx.restore();
 }
 
-function drawAuthoredPlayer(ctx, state, point, blade, art, dynamics, facing, blinking) {
+function drawAuthoredPlayer(ctx, state, point, frontPlan, art) {
   const image = art?.images?.player;
   const parts = CLASSIC_ART_PARTS.player;
-  if (!image || !parts?.cloak || !parts?.body || !parts?.rearArm || !parts?.swordArm || !parts?.blade) {
+  if (
+    !image
+    || !parts?.cloak
+    || !parts?.body
+    || !parts?.rearArm
+    || !parts?.swordArm
+    || !parts?.blade
+    || !frontPlan.swordArm
+  ) {
     return false;
   }
 
-  const pose = classicPlayerPosePlan(state, { swingSide: blade.swingSide });
-  const movementLean = clamp(state.player.lastMove?.x || 0, -1, 1) * -0.07
-    + (dynamics?.springValue(0) || 0);
-  const dashLean = state.visual.lastDash ? facing * -0.06 : 0;
-  const locomotionLean = movementLean + dashLean;
-  const bodyRotation = locomotionLean + pose.torsoRotation;
+  const { blade, swordArm } = frontPlan;
+  const pose = blade.pose;
+  const facing = blade.swingSide;
+  const locomotionLean = blade.locomotionLean;
+  const bodyRotation = blade.bodyRotation;
   const bodyScale = 0.61;
-  const bodyShoulder = transformedPartAnchor(point, parts.body, "foot", "shoulder", {
-    rotation: bodyRotation,
-    scaleX: facing * bodyScale,
-    scaleY: bodyScale,
-  });
-
-  drawImagePart(ctx, art, image, parts.cloak, point, {
-    anchor: "foot",
-    rotation: locomotionLean + pose.cloakCounterRotation,
-    scaleX: facing * bodyScale,
-    scaleY: bodyScale,
-  });
-  drawImagePart(ctx, art, image, parts.rearArm, bodyShoulder, {
-    anchor: "shoulder",
-    rotation: bodyRotation + pose.rearArmRotation,
-    scaleX: facing * 0.55,
-    scaleY: 0.55,
-  });
-
-  // Grip is the immutable visual weapon origin. The shoulder end deliberately
-  // overlaps beneath the torso so the rigid cutout keeps a clean joint while
-  // the grip remains exact through the broad follow-through.
-  drawImagePart(ctx, art, image, parts.swordArm, blade.hand, {
-    anchor: "grip",
-    rotation: locomotionLean + pose.swordArmRotation,
-    scaleX: facing * bodyScale,
-    scaleY: bodyScale,
-  });
-  drawImagePart(ctx, art, image, parts.body, point, {
-    anchor: "foot",
-    rotation: bodyRotation,
-    scaleX: facing * bodyScale,
-    scaleY: bodyScale,
-  });
-
   const authoredBlade = authoredBladePlanFromContact(blade);
   if (!authoredBlade) return false;
-  drawImagePart(ctx, art, image, parts.blade, authoredBlade.at, {
-    anchor: authoredBlade.anchor,
-    rotation: authoredBlade.rotation,
-    scaleX: authoredBlade.scale,
-  });
-  if (art?.metrics) art.metrics.bladeContactError = authoredBlade.error;
+
+  // Foreground contract: the attack trail was already drawn behind the
+  // character; this loop is the single runtime consumer of the locked order.
+  for (const layer of frontPlan.drawOrder) {
+    switch (layer) {
+      case "cloak":
+        drawImagePart(ctx, art, image, parts.cloak, point, {
+          anchor: "foot",
+          rotation: locomotionLean + pose.cloakCounterRotation,
+          scaleX: facing * bodyScale,
+          scaleY: bodyScale,
+        });
+        break;
+      case "rearArm":
+        drawImagePart(ctx, art, image, parts.rearArm, blade.bodyShoulder, {
+          anchor: "shoulder",
+          rotation: bodyRotation + pose.rearArmRotation,
+          scaleX: facing * 0.55,
+          scaleY: 0.55,
+        });
+        break;
+      case "body":
+        drawImagePart(ctx, art, image, parts.body, point, {
+          anchor: "foot",
+          rotation: bodyRotation,
+          scaleX: facing * bodyScale,
+          scaleY: bodyScale,
+        });
+        break;
+      case "swordArm":
+        drawImagePart(ctx, art, image, parts.swordArm, swordArm.at, {
+          anchor: swordArm.anchor,
+          rotation: swordArm.rotation,
+          scaleX: swordArm.scale,
+        });
+        break;
+      case "blade":
+        drawImagePart(ctx, art, image, parts.blade, authoredBlade.at, {
+          anchor: authoredBlade.anchor,
+          rotation: authoredBlade.rotation,
+          scaleX: authoredBlade.scale,
+        });
+        break;
+      default:
+        break;
+    }
+  }
+  if (art?.metrics) {
+    art.metrics.bladeContactError = authoredBlade.error;
+    art.metrics.playerDrawOrder = CLASSIC_PLAYER_DRAW_ORDER_LABEL;
+    art.metrics.playerArmAnchorError = swordArm.error;
+    art.metrics.readyBladeOutsideCssAt320 = frontPlan.bladeOutsideBodyCssAt320;
+  }
 
   ctx.fillStyle = COLORS.enamelLight;
   ellipse(ctx, point, 5, 3);
@@ -1787,7 +1929,14 @@ function drawPlayer(ctx, state, now, art, dynamics = null) {
   const grounding = classicPlayerGroundingPlan(state);
   const point = grounding.foot;
   const boss = projectWorld(state.boss);
-  const blade = classicBladeContactPlan(state, now);
+  const facing = boss.x >= point.x ? 1 : -1;
+  const movementLean = clamp(state.player.lastMove?.x || 0, -1, 1) * -0.07
+    + (dynamics?.springValue(0) || 0);
+  const dashLean = state.visual.lastDash ? facing * -0.06 : 0;
+  const frontPlan = classicPlayerFrontReadabilityPlan(state, now, {
+    locomotionLean: movementLean + dashLean,
+  });
+  const blade = frontPlan.blade;
   const blinking = state.timers.invulnerable > 0 && Math.sin(now * 40) > 0.2;
 
   ctx.save();
@@ -1796,8 +1945,7 @@ function drawPlayer(ctx, state, now, art, dynamics = null) {
   ellipse(ctx, grounding.shadow, 20, 7);
   ctx.fill();
   drawSwingTrail(ctx, state, blade);
-  const facing = boss.x >= point.x ? 1 : -1;
-  if (!drawAuthoredPlayer(ctx, state, point, blade, art, dynamics, facing, blinking)) {
+  if (!drawAuthoredPlayer(ctx, state, point, frontPlan, art)) {
     drawProceduralPlayer(ctx, state, point, blade, art, dynamics, facing, blinking);
   }
   ctx.restore();
@@ -2087,6 +2235,9 @@ export function createRenderer(canvas) {
       bossMotion: "locked-axis-keypose",
       playerMotion: "grounded-cutout-choreography",
       bladeContactError: null,
+      playerDrawOrder: null,
+      playerArmAnchorError: null,
+      readyBladeOutsideCssAt320: null,
     },
     onStatusChange: null,
   };
@@ -2178,6 +2329,9 @@ export function createRenderer(canvas) {
   function render(state, options = {}) {
     renderer.info.drawImages = 0;
     renderer.info.bladeContactError = null;
+    renderer.info.playerDrawOrder = null;
+    renderer.info.playerArmAnchorError = null;
+    renderer.info.readyBladeOutsideCssAt320 = null;
     resize();
     const now = Number.isFinite(options.now) ? options.now : 0;
     updateDynamics(state, now);

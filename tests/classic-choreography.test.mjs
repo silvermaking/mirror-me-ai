@@ -4,9 +4,20 @@ import test from "node:test";
 import { createGameState } from "../src/game-core.mjs";
 import {
   CLASSIC_ATTACK_TIMING,
+  CLASSIC_PLAYER_DRAW_ORDER,
   classicCoreReactionPlan,
   classicPlayerPosePlan,
 } from "../src/classic-choreography.mjs";
+
+test("authored player foreground order keeps the sword arm and blade in front", () => {
+  assert.deepEqual(CLASSIC_PLAYER_DRAW_ORDER, [
+    "cloak",
+    "rearArm",
+    "body",
+    "swordArm",
+    "blade",
+  ]);
+});
 
 function stateAtAttackAge(elapsedMs, result = {}) {
   const state = createGameState({ started: true });
@@ -34,6 +45,8 @@ test("player full-body cut reads at mobile scale while the true foot never moves
   assert.deepEqual(cut.rootOffset, { x: 0, y: 0 });
   assert.ok(Math.abs(cut.torsoRotation - contact.torsoRotation) >= 0.35);
   assert.ok(Math.abs(cut.cloakCounterRotation - contact.cloakCounterRotation) >= 0.2);
+  assert.ok(contact.handReach >= 35 && contact.handReach <= 58);
+  assert.ok(cut.handReach >= 35 && cut.handReach <= 58);
 });
 
 test("player pose plan is deterministic, mirrored and does not mutate state", () => {

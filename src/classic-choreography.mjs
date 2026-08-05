@@ -11,6 +11,14 @@ export const CLASSIC_ATTACK_TIMING = Object.freeze({
   recoilEndMs: 240,
 });
 
+export const CLASSIC_PLAYER_DRAW_ORDER = Object.freeze([
+  "cloak",
+  "rearArm",
+  "body",
+  "swordArm",
+  "blade",
+]);
+
 const CORE_IMPACT_DURATION = 0.3;
 
 function clamp(value, min, max) {
@@ -62,6 +70,8 @@ export function classicPlayerPosePlan(state, { swingSide = 1 } = {}) {
       cloakCounterRotation: 0,
       rearArmRotation: side * -0.16,
       swordArmRotation: side * 0.08,
+      handReach: 48,
+      handAngle: 0.45,
       bladeAngleOffset: 0,
       bodyLean: 0,
       trailAlpha: 0,
@@ -85,6 +95,8 @@ export function classicPlayerPosePlan(state, { swingSide = 1 } = {}) {
   let cloakCounterRotation = side * 0.14;
   let rearArmRotation = side * -0.48;
   let swordArmRotation = side * -0.24;
+  let handReach = 40;
+  let handAngle = 0.45;
 
   if (elapsedMs <= CLASSIC_ATTACK_TIMING.contactEndMs) {
     const amount = easeOutCubic(elapsedMs / CLASSIC_ATTACK_TIMING.contactEndMs);
@@ -93,6 +105,8 @@ export function classicPlayerPosePlan(state, { swingSide = 1 } = {}) {
     cloakCounterRotation = side * mix(0.14, 0.1, amount);
     rearArmRotation = side * mix(-0.48, -0.36, amount);
     swordArmRotation = side * mix(-0.24, -0.12, amount);
+    handReach = mix(40, 41, amount);
+    handAngle = mix(0.45, 0.32, amount);
   } else if (elapsedMs <= CLASSIC_ATTACK_TIMING.cutEndMs) {
     phase = "cut";
     const amount = easeInOutCubic(
@@ -105,6 +119,8 @@ export function classicPlayerPosePlan(state, { swingSide = 1 } = {}) {
     cloakCounterRotation = side * mix(0.1, -0.19, amount);
     rearArmRotation = side * mix(-0.36, 0.3, amount);
     swordArmRotation = side * mix(-0.12, 0.46, amount);
+    handReach = mix(41, 42, amount);
+    handAngle = mix(0.32, -0.18, amount);
   } else {
     phase = "recoil";
     const amount = easeOutCubic(
@@ -117,6 +133,8 @@ export function classicPlayerPosePlan(state, { swingSide = 1 } = {}) {
     cloakCounterRotation = side * mix(-0.19, 0.05, amount);
     rearArmRotation = side * mix(0.3, -0.08, amount);
     swordArmRotation = side * mix(0.46, 0.12, amount);
+    handReach = mix(42, 40, amount);
+    handAngle = mix(-0.18, 0.5, amount);
   }
 
   return frozenPose({
@@ -129,6 +147,8 @@ export function classicPlayerPosePlan(state, { swingSide = 1 } = {}) {
     cloakCounterRotation,
     rearArmRotation,
     swordArmRotation,
+    handReach,
+    handAngle,
     bladeAngleOffset,
     bodyLean,
     trailAlpha: clamp(1 - progress * 0.7, 0.24, 1),

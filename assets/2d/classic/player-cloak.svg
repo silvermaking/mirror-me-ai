@@ -1,49 +1,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128" width="512" height="128">
   <title>Boundary duelist — articulated cobalt cutouts</title>
   <g id="player-cloak" data-source-rect="0 0 128 128" data-pivot-hip="66 48" data-pivot-foot="66 113">
-    <path d="M69 45 C58 42 48 46 39 55 C29 65 19 72 6 76 L23 84 L10 94 L34 96 L26 108 L51 102 L62 115 L77 102 L88 76 L84 56 Z" fill="#0b1738" stroke="#050b1c" stroke-width="5" stroke-linejoin="round"/>
-    <path d="M67 48 C56 47 49 51 42 59 C33 68 25 73 15 77 L35 82 L22 91 L45 89 L36 101 L57 94 L64 107 L73 95 L81 74 L79 56 Z" fill="#254a9b"/>
-    <path d="M43 59 C53 57 61 61 67 70 L57 94 L45 89 L35 82 Z" fill="#3768c3"/>
-    <path d="M15 77 L35 82 L22 91 L45 89 L36 101 L57 94" fill="none" stroke="#527ee0" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M69 45 C58 42 48 46 39 55 C29 65 19 72 6 76 L23 84 L10 94 L34 96 L26 108 L51 102 L62 115 L77 102 L88 76 L84 56 Z" fill="#060d22" stroke="#030713" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M67 48 C56 47 49 51 42 59 C33 68 25 73 15 77 L35 82 L22 91 L45 89 L36 101 L57 94 L64 107 L73 95 L81 74 L79 56 Z" fill="#142b66"/>
+    <path d="M43 59 C53 57 61 61 67 70 L57 94 L45 89 L35 82 Z" fill="#1d4085"/>
+    <path d="M15 77 L35 82 L22 91 L45 89 L36 101 L57 94" fill="none" stroke="#294d99" stroke-width="3" stroke-linejoin="round"/>
     <path d="M67 48 C64 64 63 78 64 107 M79 56 C70 70 68 83 73 95" fill="none" stroke="#071430" stroke-width="3"/>
     <path d="M63 44 L68 37 L76 39 L82 52 L76 62 L67 58 Z" fill="#101f49" stroke="#050b1c" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M58 46 L66 48 L60 57 L52 55 Z" fill="#ba9d57" stroke="#453719" stroke-width="2"/>
-    <circle cx="66" cy="48" r="4" fill="#09142f" stroke="#d5b765" stroke-width="2"/>
+    <path d="M58 46 L66 48 L60 57 L52 55 Z" fill="#77673e" stroke="#322817" stroke-width="2"/>
+    <circle cx="66" cy="48" r="4" fill="#070f25" stroke="#8d7845" stroke-width="2"/>
   </g>
 
   <g id="player-body" data-source-rect="128 0 96 128" data-pivot-foot="48 116" data-pivot-shoulder="48 43" data-pivot-hip="48 76">
-    <path d="M160 73 L149 91 L151 113 L163 121 L174 113 L181 121 L199 115 L202 91 L191 73 Z" fill="#08132f" stroke="#050a19" stroke-width="5" stroke-linejoin="round"/>
-    <path d="M154 54 L164 40 L188 39 L200 55 L195 82 L186 94 L162 91 L151 78 Z" fill="#234895" stroke="#07142f" stroke-width="4" stroke-linejoin="round"/>
-    <path d="M160 59 L175 48 L192 56 L190 78 L181 88 L165 84 L157 74 Z" fill="#3768c3"/>
-    <path d="M158 78 L173 73 L190 80 L186 94 L163 91 Z" fill="#0d1d48" stroke="#527ee0" stroke-width="2.5" stroke-linejoin="round"/>
-    <path d="M158 41 L160 18 L171 8 L188 11 L198 23 L194 42 L184 51 L170 50 Z" fill="#0c1b42" stroke="#050a18" stroke-width="4" stroke-linejoin="round"/>
-    <path d="M166 20 L176 13 L188 18 L193 29 L188 41 L176 46 L165 39 L162 29 Z" fill="#fff9e8" stroke="#4f4638" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M154 65 L165 68 L174 64 L186 70 L198 65" fill="none" stroke="#c4a45b" stroke-width="3" stroke-linecap="round"/>
-    <path d="M155 102 L165 102 L163 117 L151 117 Z M183 102 L196 104 L198 117 L183 117 Z" fill="#11151d" stroke="#05070a" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M159 72 L148 91 L151 114 L163 122 L175 112 L183 122 L200 115 L202 91 L192 72 Z" fill="#07132f" stroke="#030713" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M153 52 L164 39 L189 39 L201 53 L198 80 L187 96 L161 92 L150 78 Z" fill="#0c2354" stroke="#030a1c" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M159 58 L175 48 L193 56 L192 77 L183 88 L164 85 L156 74 Z" fill="#1c438d" stroke="#315cae" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M157 64 L172 69 L177 63 L193 69 M158 78 L175 73 L191 80" fill="none" stroke="#d1ae5c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M157 41 L160 18 L171 7 L188 10 L199 23 L195 43 L184 52 L169 50 Z" fill="#071735" stroke="#030713" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M165 19 L176 12 L189 17 L194 29 L189 42 L176 47 L164 39 L161 28 Z" fill="#fffdf1" stroke="#3e392f" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M158 48 L168 45 L176 51 L185 45 L195 49" fill="none" stroke="#c9a657" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M154 101 L166 101 L164 118 L150 118 Z M183 102 L197 103 L200 117 L183 118 Z" fill="#0a0f19" stroke="#030507" stroke-width="3" stroke-linejoin="round"/>
   </g>
 
   <g id="player-rear-arm" data-source-rect="224 0 80 96" data-pivot-shoulder="15 24" data-pivot-hand="67 76">
-    <path d="M229 17 L241 10 L254 17 L259 31 L272 42 L283 59 L297 68 L300 82 L290 91 L276 84 L269 70 L255 60 L244 46 L231 39 L225 28 Z" fill="#0a1738" stroke="#050a1b" stroke-width="5" stroke-linejoin="round"/>
-    <path d="M238 18 L249 21 L253 34 L266 46 L276 62 L287 68 L289 78 L281 81 L273 68 L261 59 L249 45 L238 39 L232 29 Z" fill="#2f5eb4"/>
-    <path d="M278 62 L293 66 L300 76 L293 88 L280 84 L273 73 Z" fill="#d8caa8" stroke="#4e4435" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M229 17 L241 10 L254 17 L259 31 L272 42 L283 59 L297 68 L300 82 L290 91 L276 84 L269 70 L255 60 L244 46 L231 39 L225 28 Z" fill="#060e24" stroke="#030713" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M238 18 L249 21 L253 34 L266 46 L276 62 L287 68 L289 78 L281 81 L273 68 L261 59 L249 45 L238 39 L232 29 Z" fill="#172f64"/>
+    <path d="M278 62 L293 66 L300 76 L293 88 L280 84 L273 73 Z" fill="#827965" stroke="#302a22" stroke-width="3" stroke-linejoin="round"/>
     <path d="M245 29 L253 34 L249 43 L239 39 Z M266 51 L276 62 L271 69 L260 59 Z" fill="#162d65"/>
-    <path d="M282 73 L291 70 L296 78 L290 84 L281 81 Z" fill="#fff7e4"/>
+    <path d="M282 73 L291 70 L296 78 L290 84 L281 81 Z" fill="#a79b80"/>
   </g>
 
   <g id="player-sword-arm" data-source-rect="304 0 96 96" data-pivot-shoulder="14 27" data-pivot-grip="82 64">
-    <path d="M309 19 L322 12 L337 19 L342 32 L357 36 L374 46 L390 52 L398 64 L392 78 L377 80 L366 68 L349 62 L334 50 L318 45 L307 36 Z" fill="#0b183a" stroke="#050a1b" stroke-width="5" stroke-linejoin="round"/>
-    <path d="M318 21 L330 22 L336 35 L351 40 L367 51 L384 56 L390 64 L384 71 L372 66 L360 58 L344 54 L331 43 L318 40 L312 31 Z" fill="#315fae"/>
-    <path d="M365 48 L384 51 L397 61 L394 75 L383 82 L370 72 L364 60 Z" fill="#d9cbab" stroke="#4d4334" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M377 59 L389 57 L396 65 L390 74 L379 72 L373 65 Z" fill="#fff8e8"/>
-    <path d="M329 33 L339 36 L334 47 L322 42 Z M350 45 L365 51 L360 59 L345 53 Z" fill="#172e65"/>
-    <path d="M385 61 L398 61 L399 68 L386 70 Z" fill="#b99b55" stroke="#473719" stroke-width="2"/>
+    <path d="M308 17 L322 8 L339 14 L346 29 L361 35 L378 45 L392 49 L400 61 L396 76 L384 84 L371 77 L362 66 L346 61 L332 50 L316 46 L306 35 Z" fill="#07122d" stroke="#020611" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M312 18 L325 11 L338 17 L342 30 L335 42 L320 44 L310 35 L309 25 Z" fill="#e8dcc0" stroke="#4a4031" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M331 31 L346 33 L362 42 L379 51 L374 67 L359 62 L345 54 L331 47 Z" fill="#2858ad" stroke="#0b2151" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M367 47 L386 49 L398 60 L396 73 L384 82 L371 73 L366 61 Z" fill="#d8c9a8" stroke="#463d31" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M375 57 L389 55 L397 63 L391 74 L379 73 L371 65 Z" fill="#fff9e7" stroke="#776646" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M321 32 L334 35 L331 41 L318 39 M343 43 L360 49" fill="none" stroke="#d0ad5b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M384 60 L400 60 L400 69 L385 71 Z" fill="#c4a052" stroke="#3d2f18" stroke-width="2.5" stroke-linejoin="round"/>
   </g>
 
   <g id="player-blade" data-source-rect="400 0 112 64" data-pivot-grip="10 32" data-pivot-tip="105 26">
-    <path d="M402 24 L417 24 L423 18 L429 25 L423 32 L430 39 L423 46 L417 39 L402 40 Z" fill="#30291f" stroke="#100d09" stroke-width="4" stroke-linejoin="round"/>
-    <path d="M410 27 L454 23 L465 16 L475 21 L486 12 L495 19 L507 16 L499 27 L507 34 L491 32 L481 41 L470 34 L458 43 L448 35 L410 37 Z" fill="#fffbed" stroke="#171514" stroke-width="4" stroke-linejoin="round"/>
-    <path d="M418 30 L454 27 L465 21 L474 26 L486 18 L495 23 L500 21" fill="none" stroke="#d3b562" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M431 25 L438 36 M458 23 L465 35 M481 18 L489 31" fill="none" stroke="#a39a88" stroke-width="2"/>
-    <path d="M405 19 L414 19 L418 26 L414 44 L405 44 L401 35 Z" fill="#b99750" stroke="#3f3018" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M401 23 L417 23 L424 18 L430 25 L424 32 L431 39 L424 46 L417 40 L401 41 Z" fill="#2f281e" stroke="#0c0a08" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M409 26 L468 21 L481 14 L490 20 L507 18 L500 26 L507 32 L491 33 L482 40 L470 34 L409 39 Z" fill="#121417" stroke="#050607" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M413 29 L468 25 L481 19 L490 24 L503 22 L498 27 L503 30 L489 29 L481 35 L470 30 L413 35 Z" fill="#fffdf1"/>
+    <path d="M416 36 L454 33 L469 29 L481 35 L489 29 L501 28" fill="none" stroke="#d2ae58" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M404 18 L414 18 L419 25 L416 44 L404 45 L400 35 Z" fill="#c19d50" stroke="#3c2e18" stroke-width="3" stroke-linejoin="round"/>
   </g>
 </svg>
