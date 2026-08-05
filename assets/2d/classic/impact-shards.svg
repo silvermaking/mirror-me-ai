@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" width="320" height="64">
+  <title>Authored impact shard silhouettes</title>
+  <g id="impact-shard-1" data-source-rect="0 0 64 64" data-pivot-root="32 32">
+    <path d="M31 6 L41 27 L56 34 L38 39 L25 58 L23 38 L7 27 L26 25 Z" fill="#fff4d5" stroke="#5a422d" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M30 17 L36 30 L44 34 L34 36 L28 46 L28 35 L18 29 L29 29 Z" fill="#c7a65e"/>
+  </g>
+  <g id="impact-shard-2" data-source-rect="64 0 64 64" data-pivot-root="32 32">
+    <path d="M74 15 L94 22 L111 7 L108 28 L123 42 L101 40 L88 57 L87 39 L69 34 L84 27 Z" fill="#e9dbc0" stroke="#4a3829" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M89 24 L101 18 L99 30 L108 36 L97 34 L91 43 L91 33 L82 31 Z" fill="#aa392d"/>
+  </g>
+  <g id="impact-shard-3" data-source-rect="128 0 64 64" data-pivot-root="32 32">
+    <path d="M139 31 L151 23 L154 5 L164 22 L185 18 L176 34 L190 49 L170 47 L159 59 L154 43 L133 46 Z" fill="#fff8e9" stroke="#59422c" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M151 30 L160 24 L168 28 L165 37 L156 40 L149 36 Z" fill="#d0ad60"/>
+  </g>
+  <g id="impact-shard-4" data-source-rect="192 0 64 64" data-pivot-root="32 32">
+    <path d="M201 12 L220 22 L238 9 L236 27 L253 35 L235 42 L231 59 L218 45 L198 51 L207 34 L196 25 L211 25 Z" fill="#d8c9a9" stroke="#493629" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M216 27 L224 22 L232 29 L228 38 L218 40 L211 34 Z" fill="#8f332a"/>
+  </g>
+  <g id="impact-shard-5" data-source-rect="256 0 64 64" data-pivot-root="32 32">
+    <path d="M264 36 L277 26 L273 8 L289 21 L305 11 L302 30 L319 40 L299 44 L290 59 L281 45 L260 50 L270 39 Z" fill="#f3e5c8" stroke="#503b2b" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M281 28 L290 23 L298 31 L294 40 L284 42 L276 35 Z" fill="#b99550"/>
+  </g>
+</svg>

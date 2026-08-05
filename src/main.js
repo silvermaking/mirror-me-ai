@@ -9,7 +9,7 @@ import {
   updateGame,
 } from "./game-core.mjs";
 import { createAudioManager } from "./audio.mjs";
-import { createRenderer } from "./render-2d.mjs";
+import { createRenderer } from "./render-classic.mjs";
 
 const canvas = document.querySelector("canvas#game");
 const startButton = document.querySelector("button#start-button");
@@ -204,10 +204,10 @@ function updateOverlay() {
   if (loadingCopy instanceof HTMLElement) {
     loadingCopy.hidden = ready;
     loadingCopy.textContent = error
-      ? "봉인 지도 전장을 불러오지 못했습니다. 다시 시도하세요."
+      ? "전장 아트를 불러오지 못했습니다. 최초판 표현으로 계속합니다."
       : renderer.status === "context-lost"
         ? "그래픽 장치를 복구하는 중…"
-        : "봉인 지도 전장을 불러오는 중…";
+        : "전장을 준비하는 중…";
   }
   if (gameTitle instanceof HTMLElement) gameTitle.hidden = !ready;
   if (gameHook instanceof HTMLElement) gameHook.hidden = !ready;
@@ -215,7 +215,7 @@ function updateOverlay() {
   const startButtonTitle = startButton.querySelector("span");
   const startButtonDetail = startButton.querySelector("small");
   if (startButtonTitle) {
-    startButtonTitle.textContent = error ? "전장 다시 불러오기" : "첫 회피를 기록한다";
+    startButtonTitle.textContent = error ? "아트 다시 불러오기" : "전투 시작";
   }
   if (startButtonDetail) {
     startButtonDetail.textContent = error

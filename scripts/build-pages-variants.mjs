@@ -17,11 +17,21 @@ const output = join(root, ".pages-dist");
 const variants = [
   {
     id: "current",
-    label: "현재 2D challenger",
+    label: "최초판 + authored 2D 에셋",
     ref: "HEAD",
     target: "",
     paths: ["index.html", "styles.css", "src", "assets/2d"],
-    required: ["index.html", "src/main.js", "src/render-2d.mjs", "assets/2d/atlases/atlas.json"],
+    required: [
+      "index.html",
+      "src/main.js",
+      "src/render-classic.mjs",
+      "src/classic-art-contract.mjs",
+      "assets/2d/classic/boss-parts.svg",
+      "assets/2d/classic/driver-parts.svg",
+      "assets/2d/classic/player-cloak.svg",
+      "assets/2d/classic/impact-shards.svg",
+      "assets/2d/sprites/relics.svg",
+    ],
   },
   {
     id: "first-playable",
@@ -106,8 +116,8 @@ if (!threeIndex.includes('type="importmap"')) {
 }
 
 const currentMain = readFileSync(join(output, "src/main.js"), "utf8");
-if (!currentMain.includes('from "./render-2d.mjs"')) {
-  throw new Error("current build no longer points to the 2D challenger renderer");
+if (!currentMain.includes('from "./render-classic.mjs"')) {
+  throw new Error("current build no longer points to the classic asset renderer");
 }
 
 const manifest = {

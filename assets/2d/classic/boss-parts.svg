@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 192" width="640" height="192">
+  <title>Kiln reliquary — rigid authored boss cutouts</title>
+  <g id="boss-back" data-source-rect="0 0 160 192" data-pivot-root="80 164" data-pivot-core="84 101">
+    <path d="M21 153 C9 132 8 96 16 67 C25 34 49 13 81 10 C110 7 136 23 148 50 C159 74 157 109 145 136 C133 162 109 176 79 176 C54 175 33 168 21 153 Z" fill="#0b0d0e" stroke="#050607" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M31 142 C19 119 21 78 37 47 C50 23 72 16 94 19 C121 22 141 46 145 76 C149 106 135 141 111 156 C91 168 48 163 31 142 Z" fill="#20201d" stroke="#3e372b" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M39 129 C29 105 35 67 56 41 C72 22 104 24 124 43 C144 62 145 94 130 121 C117 147 91 157 67 150 C54 146 45 139 39 129 Z" fill="#111315" stroke="#5f5037" stroke-width="3"/>
+    <path d="M52 119 C44 96 50 64 70 49 C86 36 109 42 122 59 C135 76 132 105 116 123 C101 139 75 142 59 130 Z" fill="#07090a" stroke="#8d744a" stroke-width="2.5"/>
+    <path d="M26 116 L44 109 L48 126 L31 137 Z M112 31 L129 41 L124 57 L107 50 Z M118 137 L137 124 L141 140 L126 155 Z" fill="#3a3022" stroke="#8d744a" stroke-width="2"/>
+    <path d="M38 58 C51 42 65 31 82 28 M32 85 C48 71 59 61 69 46 M112 50 C127 64 132 82 132 101" fill="none" stroke="#a3844e" stroke-width="2" stroke-linecap="round" opacity=".72"/>
+    <path d="M67 99 C69 86 78 77 90 77 C104 78 113 89 112 103 C111 117 99 126 85 124 C72 122 65 112 67 99 Z" fill="#030405" stroke="#b4985e" stroke-width="3"/>
+  </g>
+
+  <g id="shell-left" data-source-rect="160 0 120 192" data-pivot-hinge="98 142">
+    <path d="M258 142 C244 149 225 157 203 158 L179 145 L165 115 L169 77 L184 42 L207 17 L236 9 L258 23 L251 48 L234 62 L229 91 L240 116 Z" fill="#d8cdb1" stroke="#332f29" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M250 136 C234 144 218 150 202 150 L184 139 L174 115 L178 82 L190 51 L211 28 L235 20 L248 27 L239 43 L218 51 L205 72 L201 108 L214 132 Z" fill="#f1e7cc"/>
+    <path d="M179 115 L201 108 L214 132 L202 150 L184 139 Z M190 51 L218 51 L205 72 L178 82 Z" fill="#a99979" opacity=".7"/>
+    <path d="M186 45 L205 53 M177 82 L200 88 M174 116 L200 121 M207 18 L213 34 M235 20 L229 39 M202 150 L201 130" fill="none" stroke="#806d4e" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M196 67 L204 73 L198 86 L205 94" fill="none" stroke="#5f4b34" stroke-width="2"/>
+    <circle cx="258" cy="142" r="7" fill="#292620" stroke="#c3a560" stroke-width="3"/>
+  </g>
+
+  <g id="shell-right" data-source-rect="280 0 120 192" data-pivot-hinge="22 142">
+    <path d="M302 142 L319 119 L324 91 L319 63 L305 47 L313 23 L336 12 L361 19 L382 41 L395 75 L397 112 L385 145 L362 159 L333 157 Z" fill="#c8b994" stroke="#332f29" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M310 136 L326 115 L332 89 L328 63 L316 47 L322 30 L339 21 L358 28 L375 47 L386 77 L388 110 L378 137 L359 149 L336 147 Z" fill="#eee2c3"/>
+    <path d="M328 63 L350 69 L358 98 L346 126 L326 115 L332 89 Z M359 149 L346 126 L378 137 Z" fill="#9d8d6f" opacity=".72"/>
+    <path d="M322 30 L334 43 M358 28 L352 46 M375 47 L360 58 M386 77 L365 82 M388 110 L363 111 M378 137 L357 129" fill="none" stroke="#79684b" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M343 51 L350 59 L345 71 L352 79" fill="none" stroke="#5c4932" stroke-width="2"/>
+    <circle cx="302" cy="142" r="7" fill="#292620" stroke="#c3a560" stroke-width="3"/>
+  </g>
+
+  <g id="shutter-left" data-source-rect="400 0 80 96" data-pivot-hinge="67 50">
+    <path d="M467 50 C460 33 446 20 428 14 L407 23 L402 45 L411 71 L434 86 L460 80 Z" fill="#d9cdb0" stroke="#302c26" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M458 49 C450 35 439 27 426 23 L414 29 L411 45 L418 63 L435 75 L452 70 Z" fill="#f5ead0"/>
+    <path d="M418 63 L437 56 L452 70 L435 75 Z" fill="#9e8e70"/>
+    <path d="M419 30 L431 35 M411 45 L429 47 M435 75 L440 60" fill="none" stroke="#766344" stroke-width="2"/>
+    <circle cx="467" cy="50" r="6" fill="#25231e" stroke="#b99a58" stroke-width="2.5"/>
+  </g>
+
+  <g id="shutter-right" data-source-rect="480 0 80 96" data-pivot-hinge="13 50">
+    <path d="M493 50 L500 27 L519 13 L542 17 L557 37 L555 65 L537 84 L512 87 L498 72 Z" fill="#c7b790" stroke="#302c26" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M502 49 L508 32 L521 22 L538 24 L548 39 L546 60 L533 74 L516 77 L506 68 Z" fill="#eee1c2"/>
+    <path d="M516 77 L520 56 L546 60 L533 74 Z" fill="#958668"/>
+    <path d="M508 32 L523 37 M502 49 L522 50 M538 24 L534 42 M546 60 L526 58" fill="none" stroke="#746144" stroke-width="2"/>
+    <circle cx="493" cy="50" r="6" fill="#25231e" stroke="#b99a58" stroke-width="2.5"/>
+  </g>
+
+  <g id="sight-crown" data-source-rect="560 0 80 96" data-pivot-root="40 84">
+    <path d="M600 84 L573 77 L566 58 L572 40 L584 46 L590 18 L602 34 L618 8 L616 42 L632 30 L635 57 L624 78 Z" fill="#151718" stroke="#050607" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M576 62 L587 50 L599 55 L611 45 L625 55 L619 71 L600 77 L583 72 Z" fill="#d9caa4" stroke="#796443" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M584 50 L590 18 L601 55 M611 45 L618 8 L619 53" fill="none" stroke="#c5a55f" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M588 64 L598 60 L611 63 L604 71 L592 70 Z" fill="#050607"/>
+    <circle cx="600" cy="84" r="6" fill="#25231e" stroke="#c3a560" stroke-width="2.5"/>
+  </g>
+</svg>

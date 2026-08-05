@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#11141b" />
+    <meta name="theme-color" content="#100d0c" />
     <meta
       name="description"
       content="당신의 습관을 읽는 AI 보스를 속이는 짧은 아레나 액션 게임"
@@ -40,12 +40,12 @@
           aria-describedby="game-hook"
         >
           <div class="start-copy">
-            <p id="loading-copy" class="loading-copy">봉인 지도 전장을 불러오는 중…</p>
-            <p class="start-kicker">THE UNMAPPED KINGDOM · 관측 001</p>
-            <h1 id="game-title">지도에 없는 왕국</h1>
+            <p id="loading-copy" class="loading-copy">전장을 준비하는 중…</p>
+            <p class="start-kicker">MIRROR TEST · 001</p>
+            <h1 id="game-title">Mirror Me</h1>
             <p id="game-hook" class="game-hook">
               <strong>첫 세 번의 회피가 보스의 다음 공격이 된다.</strong>
-              같은 방향을 가르친 뒤, LOCK 순간 반대로 빠져 코어를 직접 베어라.
+              같은 방향을 가르친 뒤, LOCK 순간 반대로 빠져 열린 코어를 직접 베어라.
             </p>
             <div class="start-rule" aria-label="전투 규칙">
               <span><b>WASD</b> 위험선 밖으로 이동</span>
@@ -53,7 +53,7 @@
               <span><b>J</b> 열린 코어 직접 공격</span>
             </div>
             <button id="start-button" class="start-button" type="button">
-              <span>첫 회피를 기록한다</span>
+              <span>전투 시작</span>
               <small>이동 · 대시 · 공격 입력으로 즉시 시작</small>
             </button>
           </div>
@@ -61,7 +61,7 @@
 
         <section id="game-over-overlay" class="game-over-overlay" aria-live="assertive" hidden>
           <div class="death-analysis">
-            <p class="death-kicker">AI 사후 분석</p>
+            <p class="death-kicker">다음 판에 바꿀 한 가지</p>
             <h2 id="game-over-title">당신의 습관을 읽혔다</h2>
 
             <div class="death-reading" aria-label="AI가 기억한 회피 기록">

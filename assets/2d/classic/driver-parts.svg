@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 128" width="512" height="128">
+  <title>Kiln reliquary — articulated pile-driver cutouts</title>
+  <g id="driver-shoulder" data-source-rect="0 0 128 128" data-pivot-axis="64 64">
+    <path d="M17 73 L10 47 L28 20 L58 8 L91 17 L116 44 L120 76 L101 107 L68 121 L34 110 Z" fill="#111314" stroke="#050607" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M27 70 L23 49 L37 29 L59 20 L84 27 L103 47 L107 70 L93 95 L68 107 L43 98 Z" fill="#d4c6a4" stroke="#725f40" stroke-width="3"/>
+    <path d="M40 76 L36 54 L49 39 L69 34 L87 45 L93 64 L83 82 L63 91 Z" fill="#24231f" stroke="#b29153" stroke-width="3"/>
+    <path d="M48 37 L38 29 M88 44 L99 34 M84 83 L96 95 M42 77 L29 86" stroke="#8b744d" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="64" cy="64" r="12" fill="#090a0a" stroke="#c1a05b" stroke-width="4"/>
+    <path d="M55 64 H73 M64 55 V73" stroke="#e4d4ad" stroke-width="2"/>
+  </g>
+
+  <g id="driver-rail" data-source-rect="128 0 160 64" data-pivot-start="12 32" data-pivot-end="148 32">
+    <path d="M140 18 L263 12 L276 22 L276 42 L262 52 L140 46 L132 38 L132 25 Z" fill="#111314" stroke="#050607" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M145 23 L260 19 L268 25 L268 38 L260 45 L145 41 L139 36 L139 28 Z" fill="#cfc09d" stroke="#715e40" stroke-width="2.5"/>
+    <path d="M151 28 H258 L263 32 L258 36 H151 Z" fill="#292722"/>
+    <path d="M160 22 L169 42 M190 21 L199 43 M220 20 L229 44 M250 19 L259 45" stroke="#8e7850" stroke-width="2" opacity=".78"/>
+    <circle cx="140" cy="32" r="5" fill="#0b0c0c" stroke="#bd9d58" stroke-width="2"/>
+    <circle cx="276" cy="32" r="5" fill="#0b0c0c" stroke="#bd9d58" stroke-width="2"/>
+  </g>
+
+  <g id="driver-collar" data-source-rect="288 0 96 96" data-pivot-axis="48 48">
+    <path d="M299 23 L323 8 L356 11 L379 32 L379 65 L359 88 L326 92 L299 76 L291 48 Z" fill="#151616" stroke="#050607" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M307 29 L326 18 L352 20 L368 36 L368 61 L353 77 L329 81 L308 69 L301 48 Z" fill="#ded0ad" stroke="#735f3f" stroke-width="3"/>
+    <path d="M317 35 L330 27 L348 30 L359 41 L358 57 L348 68 L331 71 L318 63 L313 48 Z" fill="#24231f"/>
+    <path d="M305 31 L317 39 M367 34 L357 42 M365 65 L354 59 M309 70 L320 61" stroke="#9d8351" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="336" cy="48" r="8" fill="#090a0a" stroke="#c3a45e" stroke-width="3"/>
+  </g>
+
+  <g id="driver-head" data-source-rect="384 0 128 128" data-pivot-axis="18 64" data-pivot-contact="112 64">
+    <path d="M402 49 L424 30 L461 18 L493 27 L509 49 L506 82 L487 105 L453 112 L421 99 L402 78 Z" fill="#0c0e0f" stroke="#050607" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M420 44 L446 31 L477 31 L495 44 L500 64 L493 84 L474 98 L446 97 L422 84 L411 65 Z" fill="#d6c7a5" stroke="#745f3e" stroke-width="3"/>
+    <path d="M444 40 L473 38 L489 49 L493 65 L486 79 L470 89 L446 87 L430 78 L424 63 L431 49 Z" fill="#25231e" stroke="#a48750" stroke-width="3"/>
+    <path d="M451 45 L473 44 L484 53 L486 66 L479 77 L464 82 L447 77 L439 67 L440 54 Z" fill="#111314"/>
+    <path d="M418 39 L427 50 M417 88 L428 79 M487 36 L481 49 M494 89 L482 80" stroke="#8e7448" stroke-width="3" stroke-linecap="round"/>
+    <path d="M496 41 L507 48 L510 64 L506 82 L496 88 Z" fill="#8e382b" stroke="#4f1d18" stroke-width="3"/>
+    <circle cx="402" cy="64" r="7" fill="#111314" stroke="#c1a05a" stroke-width="3"/>
+    <path d="M496 50 V78" stroke="#d45f41" stroke-width="3"/>
+  </g>
+</svg>
