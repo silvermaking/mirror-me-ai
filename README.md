@@ -4,15 +4,23 @@
 
 **회피 규칙:** 공격이 끝날 때 플레이어의 실제 발 위치가 주홍 위험선 밖이면 회피 성공입니다. WASD와 대시 모두 사용할 수 있으며, 대시는 무적이 아니라 빠른 이동입니다.
 
-## 플레이
+## 세 가지 버전 플레이
+
+각 링크는 당시의 플레이 감각과 비주얼을 고정 커밋에서 그대로 실행합니다.
+
+| 버전 | 특징 | 실행 |
+| --- | --- | --- |
+| 최초 완성판 | 가장 빠르고 명확했던 Canvas 전투 · `e63f7a0` | [플레이](https://silvermaking.github.io/mirror-me-ai/versions/first-playable/) |
+| 보관 3D판 | Three.js와 Blender GLB를 사용한 Kiln Reliquary · `630e0da` | [플레이](https://silvermaking.github.io/mirror-me-ai/versions/3d-runtime/) |
+| 현재 2D challenger | Blender 렌더 atlas를 사용하는 현재 `main` | [플레이](https://silvermaking.github.io/mirror-me-ai/) |
+
+## 조작
 
 - 이동: `WASD` 또는 방향키
 - 대시: `Space`, `Shift`, `X`
 - 공격: `J`, `Z`, 마우스 클릭
 - 재도전: 게임 오버 안내 뒤 `Enter` 또는 `Space`
 - 음소거: `M` 또는 화면 버튼
-
-배포 주소: <https://silvermaking.github.io/mirror-me-ai/>
 
 ## 로컬 실행
 
@@ -29,6 +37,14 @@ python3 -m http.server 4173
 ```bash
 node --test tests/*.test.mjs
 ```
+
+세 버전의 Pages 산출물을 로컬에서 확인하려면 다음을 실행합니다.
+
+```bash
+node scripts/build-pages-variants.mjs
+```
+
+생성 결과는 Git에서 제외되는 `.pages-dist/`에 저장됩니다.
 
 게임은 외부 런타임 라이브러리나 서버 요청 없이 정적 HTML, CSS, JavaScript로 실행됩니다.
 

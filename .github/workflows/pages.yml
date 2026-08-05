@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Run game tests
         run: node --test tests/*.test.mjs
 
@@ -32,12 +34,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Build three playable versions
+        run: node scripts/build-pages-variants.mjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload static site
         uses: actions/upload-pages-artifact@v4
         with:
-          path: .
+          path: .pages-dist
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
