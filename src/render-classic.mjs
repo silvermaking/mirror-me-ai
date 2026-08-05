@@ -7,6 +7,7 @@ import {
 } from "./classic-art-contract.mjs";
 import {
   CLASSIC_PLAYER_DRAW_ORDER,
+  classicCoreOpportunityPlan,
   classicCoreReactionPlan,
   classicPlayerPosePlan,
 } from "./classic-choreography.mjs";
@@ -20,6 +21,12 @@ const VIEW = Object.freeze({
   centerY: 404,
   scaleX: 1.03,
   scaleY: 0.77,
+});
+export const CLASSIC_MEMORY_DIRECTION_GLYPH = Object.freeze({
+  logicalWidth: 31,
+  logicalHeight: 28,
+  cssWidthAt320: 31 * 0.25,
+  cssHeightAt320: 28 * 0.25,
 });
 
 const COLORS = Object.freeze({
@@ -163,6 +170,36 @@ function vector(from, to) {
   const dy = to.y - from.y;
   const length = Math.max(0.001, Math.hypot(dx, dy));
   return { x: dx / length, y: dy / length, length };
+}
+
+export function classicCoreExitCuePlan(state) {
+  const boss = projectWorld(state.boss);
+  const player = projectWorld(state.player);
+  const away = vector(boss, player);
+  const direction = away.length > 1 ? away : { x: 0, y: 1, length: 1 };
+  const shockRadiusX = CONFIG.armorShockRadius * VIEW.scaleX;
+  const shockRadiusY = CONFIG.armorShockRadius * VIEW.scaleY;
+  const edgeDistance = 1 / Math.sqrt(
+    (direction.x / shockRadiusX) ** 2 + (direction.y / shockRadiusY) ** 2,
+  );
+  const arrowStart = {
+    x: player.x + direction.x * 27,
+    y: player.y + direction.y * 22,
+  };
+  const arrowEnd = {
+    x: boss.x + direction.x * (edgeDistance + 28),
+    y: boss.y + direction.y * (edgeDistance + 28),
+  };
+  return Object.freeze({
+    boss: Object.freeze(boss),
+    player: Object.freeze(player),
+    direction: Object.freeze({ x: direction.x, y: direction.y }),
+    normal: Object.freeze({ x: -direction.y, y: direction.x }),
+    arrowStart: Object.freeze(arrowStart),
+    arrowEnd: Object.freeze(arrowEnd),
+    shockRadiusX,
+    shockRadiusY,
+  });
 }
 
 function pointAlong(from, to, amount) {
@@ -564,6 +601,7 @@ export function classicCoreVisualPlan(state, now = 0) {
     ? clamp(1 - Math.exp(-26 * shutterAge) * Math.cos(30 * shutterAge), 0, 1.08)
     : 0;
   const reaction = classicCoreReactionPlan(state);
+  const opportunity = classicCoreOpportunityPlan(state);
   const hitAge = reaction.hitAge;
   const hitCompression = reaction.faceCompression;
   const pulse = 1 + Math.sin(now * 13) * 0.035;
@@ -578,6 +616,7 @@ export function classicCoreVisualPlan(state, now = 0) {
     finsKick: reaction.finsKick,
     radius: Math.max(0, 22 * exposure * pulse * (1 - hitCompression * 0.28)),
     shutterKick: reaction.shutterKick * 0.11,
+    closurePressure: opportunity.closurePressure,
     reflectionAlpha: open ? clamp(0.12 + exposure * 0.24, 0, 0.38) : 0,
   });
 }
@@ -945,6 +984,64 @@ function drawCoreReflection(ctx, state, now) {
   ctx.restore();
 }
 
+function drawCoreApproachPath(ctx, state, now) {
+  const opportunity = classicCoreOpportunityPlan(state);
+  if (!opportunity.active || !opportunity.approach) return;
+  const core = classicCoreVisualPlan(state, now);
+  if (core.exposure <= 0.18) return;
+
+  const player = projectWorld(state.player);
+  const bossFloor = projectWorld(state.boss);
+  const destination = { x: core.anchor.x, y: bossFloor.y + 28 };
+  const direction = vector(player, destination);
+  if (direction.length <= 64) return;
+
+  const start = pointAlong(player, destination, 0.08);
+  const end = pointAlong(player, destination, 0.84);
+  const normal = { x: -direction.y, y: direction.x };
+  const startWidth = 7;
+  const endWidth = 24;
+  const pulse = 0.88 + Math.sin(now * 8) * 0.12;
+  const alpha = clamp((core.exposure - 0.18) / 0.82, 0, 1) * pulse;
+  const gradient = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+  gradient.addColorStop(0, "rgba(82,183,174,0)");
+  gradient.addColorStop(0.28, "rgba(82,183,174,.28)");
+  gradient.addColorStop(0.72, "rgba(255,240,194,.26)");
+  gradient.addColorStop(1, "rgba(255,255,246,.54)");
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.moveTo(start.x + normal.x * startWidth, start.y + normal.y * startWidth * 0.58);
+  ctx.lineTo(end.x + normal.x * endWidth, end.y + normal.y * endWidth * 0.58);
+  ctx.lineTo(end.x - normal.x * endWidth, end.y - normal.y * endWidth * 0.58);
+  ctx.lineTo(start.x - normal.x * startWidth, start.y - normal.y * startWidth * 0.58);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(185,236,225,.72)";
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  line(ctx, start, end);
+  ctx.stroke();
+
+  for (const amount of [0.36, 0.55, 0.74]) {
+    const center = pointAlong(start, end, amount);
+    const back = {
+      x: center.x - direction.x * 13,
+      y: center.y - direction.y * 13,
+    };
+    const wing = 7;
+    lines(ctx, [
+      [{ x: back.x + normal.x * wing, y: back.y + normal.y * wing }, center],
+      [{ x: back.x - normal.x * wing, y: back.y - normal.y * wing }, center],
+    ]);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawMemorySlab(ctx, x, y, side, active) {
   const cutLeft = side === "left";
   ctx.save();
@@ -981,15 +1078,58 @@ function drawMemorySlab(ctx, x, y, side, active) {
   ctx.restore();
 }
 
+function drawMemoryDirectionGlyph(ctx, plaque, side, rotation, committed) {
+  const direction = side === "left" ? -1 : 1;
+  const halfWidth = (CLASSIC_MEMORY_DIRECTION_GLYPH.logicalWidth - 1) / 2;
+  const halfHeight = CLASSIC_MEMORY_DIRECTION_GLYPH.logicalHeight / 2;
+  const tail = { x: -direction * halfWidth, y: 1 };
+  const neck = { x: direction * 5, y: 1 };
+  const tip = { x: direction * (halfWidth + 1), y: 1 };
+  const outerTop = { x: direction * 2, y: 1 - halfHeight };
+  const outerBottom = { x: direction * 2, y: 1 + halfHeight };
+  const innerTip = { x: direction * 14, y: 1 };
+  const innerTop = { x: direction * 4, y: -9 };
+  const innerBottom = { x: direction * 4, y: 11 };
+  const color = committed ? COLORS.rustBright : COLORS.enamelLight;
+  ctx.save();
+  ctx.translate(plaque.x, plaque.y);
+  ctx.rotate(rotation);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(12,9,7,.92)";
+  ctx.lineWidth = 10;
+  line(ctx, tail, neck);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(12,9,7,.92)";
+  ctx.beginPath();
+  ctx.moveTo(tip.x, tip.y);
+  ctx.lineTo(outerTop.x, outerTop.y);
+  ctx.lineTo(outerBottom.x, outerBottom.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 5;
+  line(ctx, tail, neck);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(innerTip.x, innerTip.y);
+  ctx.lineTo(innerTop.x, innerTop.y);
+  ctx.lineTo(innerBottom.x, innerBottom.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawMemoryRack(ctx, state, base, now, art) {
   ctx.save();
   ctx.strokeStyle = COLORS.iron;
   ctx.lineWidth = 8;
-  line(ctx, { x: base.x - 54, y: base.y - 133 }, { x: base.x + 54, y: base.y - 133 });
+  line(ctx, { x: base.x - 68, y: base.y - 133 }, { x: base.x + 68, y: base.y - 133 });
   ctx.stroke();
   ctx.strokeStyle = COLORS.brass;
   ctx.lineWidth = 2;
-  line(ctx, { x: base.x - 54, y: base.y - 139 }, { x: base.x + 54, y: base.y - 139 });
+  line(ctx, { x: base.x - 68, y: base.y - 139 }, { x: base.x + 68, y: base.y - 139 });
   ctx.stroke();
 
   // The state machine immediately keeps only the real opposite escape after an
@@ -1004,25 +1144,25 @@ function drawMemoryRack(ctx, state, base, now, art) {
   const combining = state.phase === PHASE.COMBINE || Boolean(state.lock);
   for (let index = 0; index < 3; index += 1) {
     const side = filled[index];
-    const x = base.x + (index - 1) * 37;
+    const x = base.x + (index - 1) * 44;
     const memoryMotion = classicMemoryMotionPlan(state, index, filled.length);
     const wobble = state.phase === PHASE.COMBINE && side
       ? Math.sin(now * 18 + index) * 1.5 * (1 - memoryMotion.alignment)
       : 0;
-    ctx.fillStyle = "#100d0b";
-    roundedRect(ctx, x - 18, base.y - 166, 36, 48, 4);
+    ctx.fillStyle = "rgba(16,13,11,.58)";
+    roundedRect(ctx, x - 22, base.y - 171, 44, 54, 5);
     ctx.fill();
     ctx.strokeStyle = COLORS.ironEdge;
     ctx.lineWidth = 1;
     ctx.stroke();
     if (side) {
       const slot = {
-        x: mix(x, base.x + (index - 1) * 34, memoryMotion.alignment),
+        x: mix(x, base.x + (index - 1) * 40, memoryMotion.alignment),
         y: base.y - 143 - memoryMotion.alignment * (index === 1 ? 5 : 1),
       };
       let plaque = { x: slot.x + wobble, y: slot.y };
-      let plaqueScale = 0.78;
-      let plaqueScaleY = 0.88;
+      let plaqueScale = 0.98;
+      let plaqueScaleY = 1.02;
       let plaqueRotation = side === "left" ? -0.13 : 0.13;
       if (memoryMotion.inserting && state.visual.escapeMarker) {
         const start = projectWorld(state.visual.escapeMarker);
@@ -1031,8 +1171,8 @@ function drawMemoryRack(ctx, state, base, now, art) {
         plaque.x += (side === "left" ? -1 : 1)
           * Math.sin(memoryMotion.insertion * Math.PI)
           * 54;
-        plaqueScale = mix(0.46, 0.78, memoryMotion.insertion);
-        plaqueScaleY = mix(0.52, 0.88, memoryMotion.insertion);
+        plaqueScale = mix(0.5, 0.98, memoryMotion.insertion);
+        plaqueScaleY = mix(0.56, 1.02, memoryMotion.insertion);
         plaqueRotation = mix(
           side === "left" ? -0.48 : 0.48,
           side === "left" ? -0.13 : 0.13,
@@ -1069,6 +1209,7 @@ function drawMemoryRack(ctx, state, base, now, art) {
         },
       );
       if (!usedArt) drawMemorySlab(ctx, plaque.x, plaque.y, side, combining);
+      drawMemoryDirectionGlyph(ctx, plaque, side, plaqueRotation, combining);
       if (memoryMotion.inserting && memoryMotion.insertion >= 0.7) {
         const settle = clamp((memoryMotion.insertion - 0.7) / 0.3, 0, 1);
         ctx.save();
@@ -1076,15 +1217,6 @@ function drawMemoryRack(ctx, state, base, now, art) {
         ctx.strokeStyle = COLORS.brassLight;
         ctx.lineWidth = 4 - settle * 2;
         ellipse(ctx, slot, 14 + settle * 18, 8 + settle * 8);
-        ctx.stroke();
-        ctx.restore();
-      }
-      if (usedArt) {
-        ctx.save();
-        ctx.translate(plaque.x, plaque.y + 1);
-        ctx.strokeStyle = combining ? COLORS.rustBright : COLORS.iron;
-        ctx.lineWidth = 2;
-        line(ctx, { x: -6, y: 0 }, { x: side === "left" ? -13 : 13, y: 0 });
         ctx.stroke();
         ctx.restore();
       }
@@ -1595,8 +1727,17 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, seconda
     ctx.restore();
   }
 
+  const closurePressure = coreVisual.closurePressure || 0;
+  const closingTremor = Math.sin(now * 34) * closurePressure * 0.018;
   const shellOpen = coreOpen
-    ? 0.72 * coreVisual.exposure + coreVisual.shutterKick + secondaryKick * 0.42
+    ? Math.max(
+        0.54 * coreVisual.exposure,
+        0.72 * coreVisual.exposure
+          + coreVisual.shutterKick
+          + secondaryKick * 0.42
+          - closurePressure * 0.16
+          + closingTremor,
+      )
     : 0.06;
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.boss.shellLeft, leftHinge, {
     anchor: "hinge",
@@ -1610,7 +1751,14 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, seconda
   });
 
   const shutterOpen = coreOpen
-    ? 0.94 * coreVisual.exposure + coreVisual.shutterKick * 1.35 + secondaryKick * 0.58
+    ? Math.max(
+        0.64 * coreVisual.exposure,
+        0.94 * coreVisual.exposure
+          + coreVisual.shutterKick * 1.35
+          + secondaryKick * 0.58
+          - closurePressure * 0.28
+          - closingTremor,
+      )
     : 0.02;
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.boss.shutterLeft, core, {
     anchor: "hinge",
@@ -2035,17 +2183,44 @@ function drawDynamicParticles(ctx, dynamics) {
   ctx.restore();
 }
 
-function drawCoreClosureWarning(ctx, state) {
-  if (state.phase !== PHASE.CORE_OPEN || state.phaseTime > 0.6) return;
+function drawCoreClosureWarning(ctx, state, now) {
+  const opportunity = classicCoreOpportunityPlan(state);
+  if (!opportunity.warning) return;
   const point = projectWorld(state.boss);
-  const progress = 1 - clamp(state.phaseTime / 0.6, 0, 1);
+  const progress = opportunity.closurePressure;
+  const pulse = 0.86 + Math.sin(now * (opportunity.urgent ? 18 : 11)) * 0.14;
+  const radiusX = CONFIG.armorShockRadius * VIEW.scaleX;
+  const radiusY = CONFIG.armorShockRadius * VIEW.scaleY;
+  const innerScale = mix(0.96, 0.78, progress);
   ctx.save();
-  ctx.strokeStyle = `rgba(197,92,50,${0.45 + progress * 0.35})`;
+  ctx.globalAlpha = pulse;
+  ctx.strokeStyle = opportunity.urgent
+    ? `rgba(197,92,50,${0.58 + progress * 0.34})`
+    : `rgba(196,156,80,${0.42 + progress * 0.28})`;
   ctx.lineWidth = 3 + progress * 2;
-  ctx.setLineDash([11, 8]);
-  ellipse(ctx, point, CONFIG.armorShockRadius * VIEW.scaleX, CONFIG.armorShockRadius * VIEW.scaleY);
+  ctx.setLineDash(opportunity.urgent ? [8, 5] : [15, 10]);
+  ellipse(ctx, point, radiusX, radiusY);
+  ctx.stroke();
+  ctx.lineWidth = 2 + progress * 3;
+  ctx.setLineDash([6, 9]);
+  ellipse(ctx, point, radiusX * innerScale, radiusY * innerScale);
   ctx.stroke();
   ctx.setLineDash([]);
+
+  ctx.lineWidth = 3;
+  for (let index = 0; index < 12; index += 1) {
+    const angle = (Math.PI * 2 * index) / 12;
+    const outer = {
+      x: point.x + Math.cos(angle) * radiusX,
+      y: point.y + Math.sin(angle) * radiusY,
+    };
+    const inner = {
+      x: point.x + Math.cos(angle) * radiusX * (0.94 - progress * 0.06),
+      y: point.y + Math.sin(angle) * radiusY * (0.94 - progress * 0.06),
+    };
+    line(ctx, inner, outer);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -2101,7 +2276,10 @@ export function classicFirstRunGuidanceStage(state) {
   ) {
     return "opposite";
   }
-  if (state.phase === PHASE.CORE_OPEN && state.stats?.coreHits === 0) {
+  if (state.phase === PHASE.CORE_OPEN) {
+    const opportunity = classicCoreOpportunityPlan(state);
+    if (opportunity.hits >= 2) return "exit";
+    if (state.stats?.coreHits !== 0) return null;
     const duration = timingForRound(Number.isFinite(state.round) ? state.round : 1).coreOpen;
     const openAge = Math.max(0, duration - (state.phaseTime || 0));
     if (openAge >= 0.09) return "core";
@@ -2141,11 +2319,48 @@ function drawFirstRunGuidance(ctx, state, now) {
   }
 
   if (stage === "core") {
+    const core = classicCoreScreenAnchor(state, now);
+    const cue = pointAlong(player, core, 0.28);
     drawGroundHint(
       ctx,
-      { x: player.x, y: Math.min(620, player.y + 58) },
-      "J · 순백 코어",
+      { x: clamp(cue.x, 155, 1125), y: clamp(cue.y + 48, 180, 620) },
+      "접근 · J",
       "#fffdf1",
+    );
+    return;
+  }
+
+  if (stage === "exit") {
+    const exit = classicCoreExitCuePlan(state);
+    const { player: cuePlayer, direction, normal, arrowStart, arrowEnd } = exit;
+    ctx.save();
+    ctx.strokeStyle = "rgba(8,7,6,.9)";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 10;
+    lines(ctx, [
+      [arrowStart, arrowEnd],
+      [{ x: arrowEnd.x - direction.x * 22 + normal.x * 12, y: arrowEnd.y - direction.y * 22 + normal.y * 12 }, arrowEnd],
+      [{ x: arrowEnd.x - direction.x * 22 - normal.x * 12, y: arrowEnd.y - direction.y * 22 - normal.y * 12 }, arrowEnd],
+    ]);
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.enamelLight;
+    ctx.lineWidth = 5;
+    lines(ctx, [
+      [arrowStart, arrowEnd],
+      [{ x: arrowEnd.x - direction.x * 22 + normal.x * 12, y: arrowEnd.y - direction.y * 22 + normal.y * 12 }, arrowEnd],
+      [{ x: arrowEnd.x - direction.x * 22 - normal.x * 12, y: arrowEnd.y - direction.y * 22 - normal.y * 12 }, arrowEnd],
+    ]);
+    ctx.stroke();
+    ctx.restore();
+    drawGroundHint(
+      ctx,
+      {
+        x: clamp(mix(cuePlayer.x, arrowEnd.x, 0.58), 150, 1130),
+        y: clamp(mix(cuePlayer.y, arrowEnd.y, 0.58) + 28, 170, 620),
+      },
+      "2타 · 이탈",
+      COLORS.enamelLight,
     );
   }
 }
@@ -2193,7 +2408,8 @@ export function renderGame(ctx, state, { now = 0, art = null, dynamics = null } 
   drawExploreWarning(ctx, scene);
   drawKilnTarget(ctx, scene, now, art);
   drawDashSkid(ctx, scene);
-  drawCoreClosureWarning(ctx, scene);
+  drawCoreApproachPath(ctx, scene, now);
+  drawCoreClosureWarning(ctx, scene, now);
   drawCoreReflection(ctx, scene, now);
   drawBoss(ctx, scene, now, art, dynamics);
   drawPlayer(ctx, scene, now, art, dynamics);

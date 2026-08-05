@@ -99,4 +99,8 @@ test("first-run guidance follows the physical cause instead of preceding it", ()
   assert.equal(classicFirstRunGuidanceStage(state), null);
   state.phaseTime -= 0.1;
   assert.equal(classicFirstRunGuidanceStage(state), "core");
+
+  state.coreHitsThisWindow = 2;
+  state.stats.coreHits = 2;
+  assert.equal(classicFirstRunGuidanceStage(state), "exit");
 });

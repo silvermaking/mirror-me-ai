@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createGameState } from "../src/game-core.mjs";
+import { PHASE, createGameState } from "../src/game-core.mjs";
 import {
   CLASSIC_ATTACK_TIMING,
   CLASSIC_PLAYER_DRAW_ORDER,
+  classicCoreOpportunityPlan,
   classicCoreReactionPlan,
   classicPlayerPosePlan,
 } from "../src/classic-choreography.mjs";
@@ -94,4 +95,47 @@ test("only a direct core impact creates ordered core reaction channels", () => {
 
   state.visual.impact.remaining = 0.175;
   assert.notEqual(classicCoreReactionPlan(state).bodyKick, 0);
+});
+
+test("the second core hit visibly preloads closure before the risky third hit", () => {
+  const state = createGameState({ started: true });
+  state.phase = PHASE.CORE_OPEN;
+  state.boss.coreOpen = true;
+  state.phaseTime = 1.2;
+  state.coreHitsThisWindow = 0;
+
+  assert.deepEqual(classicCoreOpportunityPlan(state), {
+    active: true,
+    hits: 0,
+    remaining: 1.2,
+    approach: true,
+    warning: false,
+    urgent: false,
+    closurePressure: 0,
+  });
+
+  state.coreHitsThisWindow = 2;
+  const secondHit = classicCoreOpportunityPlan(state);
+  assert.equal(secondHit.approach, false);
+  assert.equal(secondHit.warning, true);
+  assert.equal(secondHit.urgent, false);
+  assert.equal(secondHit.closurePressure, 0.48);
+
+  state.coreHitsThisWindow = 3;
+  state.phaseTime = 0.38;
+  const thirdHit = classicCoreOpportunityPlan(state);
+  assert.equal(thirdHit.warning, true);
+  assert.equal(thirdHit.urgent, true);
+  assert.equal(thirdHit.closurePressure, 1);
+});
+
+test("core opportunity choreography is deterministic and never mutates gameplay state", () => {
+  const state = createGameState({ started: true });
+  state.phase = PHASE.CORE_OPEN;
+  state.boss.coreOpen = true;
+  state.phaseTime = 0.7;
+  state.coreHitsThisWindow = 1;
+  const before = structuredClone(state);
+  assert.deepEqual(classicCoreOpportunityPlan(state), classicCoreOpportunityPlan(state));
+  assert.deepEqual(state, before);
 });

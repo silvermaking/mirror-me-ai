@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { PHASE, createGameState } from "../src/game-core.mjs";
 import {
+  CLASSIC_MEMORY_DIRECTION_GLYPH,
   classicAuthoredBladePlan,
   classicBladeContactPlan,
   classicBraceArticulationPlan,
@@ -13,6 +14,11 @@ import {
   classicPlayerGroundingPlan,
   projectWorld,
 } from "../src/render-classic.mjs";
+
+test("memory direction glyph remains a filled readable mark at 320", () => {
+  assert.ok(CLASSIC_MEMORY_DIRECTION_GLYPH.cssWidthAt320 >= 7);
+  assert.ok(CLASSIC_MEMORY_DIRECTION_GLYPH.cssHeightAt320 >= 6);
+});
 
 function coreContactState() {
   const state = createGameState({ started: true });

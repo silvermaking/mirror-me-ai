@@ -20,6 +20,7 @@ export const CLASSIC_PLAYER_DRAW_ORDER = Object.freeze([
 ]);
 
 const CORE_IMPACT_DURATION = 0.3;
+const CORE_CLOSE_WARNING_SECONDS = 0.74;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -195,5 +196,51 @@ export function classicCoreReactionPlan(state) {
     finsKick: delayedWave(hitAge, 0.04, 18, 38),
     shutterKick: delayedWave(hitAge, 0.075, 17, 34),
     bodyKick: delayedWave(hitAge, 0.11, 15, 42),
+  });
+}
+
+/**
+ * Renderer-only warning pressure for the open-core punish window.
+ *
+ * The immutable game state still owns the real timer, damage cap and return
+ * shock. This plan only lets the shell and floor begin communicating that
+ * result after the second hit, before the third hit shortens the window.
+ */
+export function classicCoreOpportunityPlan(state) {
+  const active = state?.phase === "core_open" && Boolean(state?.boss?.coreOpen);
+  if (!active) {
+    return Object.freeze({
+      active: false,
+      hits: 0,
+      remaining: 0,
+      approach: false,
+      warning: false,
+      urgent: false,
+      closurePressure: 0,
+    });
+  }
+
+  const hits = clamp(
+    Math.floor(Number.isFinite(state.coreHitsThisWindow) ? state.coreHitsThisWindow : 0),
+    0,
+    3,
+  );
+  const remaining = Math.max(0, Number.isFinite(state.phaseTime) ? state.phaseTime : 0);
+  const timePressure = clamp(
+    (CORE_CLOSE_WARNING_SECONDS - remaining) / CORE_CLOSE_WARNING_SECONDS,
+    0,
+    1,
+  );
+  const hitPressure = hits >= 3 ? 1 : hits === 2 ? 0.48 : hits === 1 ? 0.12 : 0;
+  const closurePressure = Math.max(timePressure, hitPressure);
+
+  return Object.freeze({
+    active: true,
+    hits,
+    remaining,
+    approach: hits === 0,
+    warning: hits >= 2 || remaining <= CORE_CLOSE_WARNING_SECONDS,
+    urgent: hits >= 3 || remaining <= 0.42,
+    closurePressure,
   });
 }
