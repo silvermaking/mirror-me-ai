@@ -25,6 +25,7 @@ const variants = [
       "index.html",
       "src/main.js",
       "src/render-classic.mjs",
+      "src/visual-dynamics.mjs",
       "src/classic-art-contract.mjs",
       "assets/2d/classic/boss-parts.svg",
       "assets/2d/classic/driver-parts.svg",

@@ -1,10 +1,11 @@
-import { CONFIG, PHASE } from "./game-core.mjs";
+import { CONFIG, PHASE, timingForRound } from "./game-core.mjs";
 import {
   CLASSIC_ART_ASSETS,
   CLASSIC_ART_LIMITS,
   CLASSIC_ART_PARTS,
   CLASSIC_RELIC_PARTS,
 } from "./classic-art-contract.mjs";
+import { createVisualDynamics } from "./visual-dynamics.mjs";
 
 const LOGICAL_WIDTH = 1280;
 const LOGICAL_HEIGHT = 720;
@@ -42,6 +43,8 @@ const CLASSIC_ART_URLS = Object.freeze(Object.fromEntries(
     new URL(`../${asset.file}`, import.meta.url),
   ]),
 ));
+
+const ATTACK_VISUAL_DURATION = 0.24;
 
 function drawImagePart(ctx, art, image, part, at, {
   anchor = Object.keys(part.anchors)[0],
@@ -184,19 +187,121 @@ export function classicCoreScreenAnchor(state, now = 0) {
   return transformLocal(root, { x: 4, y: -63 }, tilt, 1.02);
 }
 
+function easeOutCubic(value) {
+  const amount = clamp(value, 0, 1);
+  return 1 - (1 - amount) ** 3;
+}
+
+function easeInOutCubic(value) {
+  const amount = clamp(value, 0, 1);
+  return amount < 0.5
+    ? 4 * amount ** 3
+    : 1 - ((-2 * amount + 2) ** 3) / 2;
+}
+
+export function classicAttackVisualPlan(state) {
+  const attack = state.visual?.attack;
+  if (!attack) {
+    return Object.freeze({
+      active: false,
+      progress: 0,
+      phase: "idle",
+      contact: false,
+      angleOffset: 0,
+      bodyLean: 0,
+      trailAlpha: 0,
+    });
+  }
+
+  const progress = clamp(1 - attack.remaining / ATTACK_VISUAL_DURATION, 0, 1);
+  const resultContact = Boolean(attack.hit || attack.armor);
+  let phase = "contact";
+  let angleOffset = 0;
+  let bodyLean = 0.08;
+
+  // game-core applies HP and armor results on the input frame. The renderer
+  // therefore begins at honest contact, then makes the otherwise invisible
+  // result readable through a broad, foot-anchored follow-through.
+  if (progress <= 0.2) {
+    const amount = easeOutCubic(progress / 0.2);
+    angleOffset = 0;
+    bodyLean = 0.08 + amount * 0.05;
+  } else if (progress <= 0.7) {
+    phase = "cut";
+    const amount = easeInOutCubic((progress - 0.2) / 0.5);
+    angleOffset = mix(0.16, 1.82, amount);
+    bodyLean = mix(0.13, 0.21, amount);
+  } else {
+    phase = "recoil";
+    const amount = easeOutCubic((progress - 0.7) / 0.3);
+    angleOffset = mix(1.82, 0.88, amount);
+    bodyLean = mix(0.21, 0.04, amount);
+  }
+
+  return Object.freeze({
+    active: true,
+    progress,
+    phase,
+    contact: resultContact && progress <= 0.2,
+    angleOffset,
+    bodyLean,
+    trailAlpha: clamp(1 - progress * 0.7, 0.24, 1),
+  });
+}
+
+export function classicCoreVisualPlan(state, now = 0) {
+  const open = Boolean(state.boss?.coreOpen);
+  const duration = timingForRound(Number.isFinite(state.round) ? state.round : 1).coreOpen;
+  const openAge = state.phase === PHASE.CORE_OPEN
+    ? Math.max(0, duration - (state.phaseTime || 0))
+    : open ? 1 : 0;
+  const exposure = open
+    ? clamp(1 - Math.exp(-18 * openAge) * Math.cos(25 * openAge), 0, 1.08)
+    : 0;
+  const impact = state.visual?.impact;
+  const hitAge = impact?.tone === "core"
+    ? clamp(0.3 - impact.remaining, 0, 0.3)
+    : Infinity;
+  const hitCompression = Number.isFinite(hitAge)
+    ? Math.exp(-18 * hitAge) * Math.cos(34 * hitAge)
+    : 0;
+  const pulse = 1 + Math.sin(now * 13) * 0.035;
+  return Object.freeze({
+    anchor: classicCoreScreenAnchor(state, now),
+    open,
+    openAge,
+    exposure,
+    hitAge,
+    radius: Math.max(0, 22 * exposure * pulse * (1 - hitCompression * 0.28)),
+    shutterKick: Number.isFinite(hitAge) ? hitCompression * 0.11 : 0,
+    reflectionAlpha: open ? clamp(0.12 + exposure * 0.24, 0, 0.38) : 0,
+  });
+}
+
 export function classicBladeContactPlan(state, now = 0) {
   const point = projectWorld(state.player);
   const boss = projectWorld(state.boss);
   const hand = { x: point.x, y: point.y - 29 };
   const target = state.boss.coreOpen ? classicCoreScreenAnchor(state, now) : boss;
-  const angle = Math.atan2(target.y - hand.y, target.x - hand.x);
+  const targetAngle = Math.atan2(target.y - hand.y, target.x - hand.x);
   const contactLength = Math.hypot(target.x - hand.x, target.y - hand.y);
-  const length = state.visual.attack?.hit ? contactLength : 43;
+  const motion = classicAttackVisualPlan(state);
+  const swingSide = target.x >= hand.x ? 1 : -1;
+  const angle = targetAngle + motion.angleOffset * swingSide;
+  const length = motion.contact
+    ? contactLength
+    : state.visual.attack?.armor
+      ? 43
+      : motion.active ? 54 : 43;
   return {
     hand,
     target,
+    targetAngle,
     angle,
     length,
+    contactLength,
+    swingSide,
+    motion,
     tip: {
       x: hand.x + Math.cos(angle) * length,
       y: hand.y + Math.sin(angle) * length,
@@ -409,6 +514,30 @@ function drawDashSkid(ctx, state) {
   ctx.stroke();
   ctx.fillStyle = COLORS.enamelLight;
   ellipse(ctx, to, 5, 2.5);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawCoreReflection(ctx, state, now) {
+  const core = classicCoreVisualPlan(state, now);
+  if (!core.open || core.exposure <= 0.02) return;
+  const floor = projectWorld(state.boss);
+  const width = 72 * core.exposure;
+  const height = 16 * core.exposure;
+  const reflection = ctx.createRadialGradient(
+    core.anchor.x,
+    floor.y + 26,
+    0,
+    core.anchor.x,
+    floor.y + 26,
+    width,
+  );
+  reflection.addColorStop(0, `rgba(255,248,218,${core.reflectionAlpha})`);
+  reflection.addColorStop(0.42, `rgba(243,187,98,${core.reflectionAlpha * 0.58})`);
+  reflection.addColorStop(1, "rgba(197,92,50,0)");
+  ctx.save();
+  ctx.fillStyle = reflection;
+  ellipse(ctx, { x: core.anchor.x, y: floor.y + 26 }, width, height);
   ctx.fill();
   ctx.restore();
 }
@@ -817,13 +946,14 @@ function drawFurnaceBody(ctx, state, base, tilt, now, pile) {
   }
 }
 
-function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art) {
+function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, secondaryKick = 0) {
   const image = art?.images?.boss;
   if (!image) return false;
   const coreOpen = state.boss.coreOpen;
   const root = { x: base.x, y: base.y + 9 };
   const bodyScale = 1.02;
-  const core = classicCoreScreenAnchor(state, now);
+  const coreVisual = classicCoreVisualPlan(state, now);
+  const core = coreVisual.anchor;
   const leftHinge = transformLocal(root, { x: -24, y: -43 }, tilt, 1);
   const rightHinge = transformLocal(root, { x: 27, y: -43 }, tilt, 1);
 
@@ -834,26 +964,56 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art) {
   });
 
   if (coreOpen) {
-    const glow = ctx.createRadialGradient(core.x, core.y, 3, core.x, core.y, 51);
+    ctx.save();
+    ctx.globalAlpha = clamp(coreVisual.exposure, 0, 1);
+    ctx.fillStyle = "rgba(4,3,3,.96)";
+    ellipse(ctx, core, 37, 34);
+    ctx.fill();
+
+    const glowRadius = 61 * coreVisual.exposure;
+    const glow = ctx.createRadialGradient(core.x, core.y, 2, core.x, core.y, glowRadius);
     glow.addColorStop(0, "rgba(255,255,246,1)");
     glow.addColorStop(0.24, "rgba(255,240,194,.95)");
     glow.addColorStop(0.6, "rgba(234,157,68,.46)");
     glow.addColorStop(1, "rgba(174,55,24,0)");
-    ctx.save();
     ctx.fillStyle = glow;
-    ellipse(ctx, core, 51, 45);
+    ellipse(ctx, core, glowRadius, glowRadius * 0.86);
     ctx.fill();
-    ctx.fillStyle = COLORS.fire;
-    ellipse(ctx, core, 18 + Math.sin(now * 20) * 1.5, 18 + Math.cos(now * 17) * 1.5);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,247,.92)";
-    ctx.lineWidth = 3;
-    ellipse(ctx, core, 25, 23);
+
+    ctx.strokeStyle = "rgba(255,245,214,.84)";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    const crackLength = 31 * coreVisual.exposure;
+    lines(ctx, [
+      [{ x: core.x - 12, y: core.y - 8 }, { x: core.x - crackLength, y: core.y - 21 }],
+      [{ x: core.x + 13, y: core.y - 7 }, { x: core.x + crackLength, y: core.y - 19 }],
+      [{ x: core.x - 13, y: core.y + 8 }, { x: core.x - crackLength, y: core.y + 20 }],
+      [{ x: core.x + 13, y: core.y + 8 }, { x: core.x + crackLength, y: core.y + 22 }],
+    ]);
     ctx.stroke();
+
+    ctx.fillStyle = "#fffdf1";
+    ellipse(ctx, core, coreVisual.radius, coreVisual.radius * 0.94);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.98)";
+    ctx.lineWidth = 4;
+    ellipse(ctx, core, coreVisual.radius + 6, coreVisual.radius + 4);
+    ctx.stroke();
+
+    if (Number.isFinite(coreVisual.hitAge) && coreVisual.hitAge <= 0.12) {
+      const hitProgress = clamp(coreVisual.hitAge / 0.12, 0, 1);
+      ctx.globalAlpha = 1 - hitProgress;
+      ctx.strokeStyle = COLORS.white;
+      ctx.lineWidth = 10 - hitProgress * 6;
+      ellipse(ctx, core, 27 + hitProgress * 34, 24 + hitProgress * 27);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
-  const shellOpen = coreOpen ? 0.72 : 0.06;
+  const shellOpen = coreOpen
+    ? 0.72 * coreVisual.exposure + coreVisual.shutterKick + secondaryKick * 0.42
+    : 0.06;
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.boss.shellLeft, leftHinge, {
     anchor: "hinge",
     rotation: tilt - shellOpen,
@@ -865,7 +1025,9 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art) {
     scaleX: 0.9,
   });
 
-  const shutterOpen = coreOpen ? 0.94 : 0.02;
+  const shutterOpen = coreOpen
+    ? 0.94 * coreVisual.exposure + coreVisual.shutterKick * 1.35 + secondaryKick * 0.58
+    : 0.02;
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.boss.shutterLeft, core, {
     anchor: "hinge",
     rotation: tilt - shutterOpen,
@@ -900,7 +1062,7 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art) {
   return true;
 }
 
-function drawBoss(ctx, state, now, art) {
+function drawBoss(ctx, state, now, art, dynamics = null) {
   const base = projectWorld(state.boss);
   // The small stabilizer reads exploration lanes. The heavy pile-driver remains
   // visibly stowed until LOCK commits it to a fixed plate, keeping the player
@@ -913,6 +1075,7 @@ function drawBoss(ctx, state, now, art) {
   const direction = target.x >= base.x ? 1 : -1;
   // A miss is not a generic glow state: the pile-driver stays buried while its
   // overextension drags the low furnace body sideways and pulls its shutters.
+  const dynamicsKick = dynamics?.springValue(1) || 0;
   const tilt = resolved ? direction * 0.27 : locked ? direction * 0.035 : 0;
   const shake = state.visual.shake ? Math.sin(now * 85) * state.visual.shake * 14 : 0;
   const bodyBase = {
@@ -931,7 +1094,16 @@ function drawBoss(ctx, state, now, art) {
 
   drawBraceArm(ctx, braceStart, braceGround);
   const pile = drawDriver(ctx, shoulder, target, resolved, state.visual.shake || 0, art);
-  const authoredBody = drawAuthoredFurnaceBody(ctx, state, bodyBase, tilt, now, pile, art);
+  const authoredBody = drawAuthoredFurnaceBody(
+    ctx,
+    state,
+    bodyBase,
+    tilt,
+    now,
+    pile,
+    art,
+    dynamicsKick,
+  );
   if (!authoredBody) drawFurnaceBody(ctx, state, bodyBase, tilt, now, pile);
   drawMemoryRack(ctx, state, bodyBase, now, art);
 
@@ -958,7 +1130,64 @@ function drawBoss(ctx, state, now, art) {
   ctx.restore();
 }
 
-function drawPlayer(ctx, state, now, art) {
+function drawSwingTrail(ctx, state, blade) {
+  if (!blade.motion.active) return;
+  const { motion } = blade;
+  const sweep = blade.angle - blade.targetAngle;
+  if (Math.abs(sweep) < 0.04 && !motion.contact) return;
+  const color = state.visual.attack?.hit
+    ? "#fff7d6"
+    : state.visual.attack?.armor
+      ? COLORS.porcelainLight
+      : COLORS.enamelLight;
+  const radius = motion.contact
+    ? Math.min(142, Math.max(64, blade.contactLength))
+    : 66;
+  const sampleCount = 18;
+  const points = [];
+  for (let index = 0; index <= sampleCount; index += 1) {
+    const amount = index / sampleCount;
+    const curvedAmount = easeOutCubic(amount);
+    const angle = mix(blade.targetAngle, blade.angle, curvedAmount);
+    const localRadius = radius * mix(0.76, 1, amount);
+    points.push({
+      x: blade.hand.x + Math.cos(angle) * localRadius,
+      y: blade.hand.y + Math.sin(angle) * localRadius,
+    });
+  }
+
+  ctx.save();
+  ctx.globalAlpha = motion.trailAlpha;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (const point of points.slice(1)) ctx.lineTo(point.x, point.y);
+  ctx.strokeStyle = "rgba(8,7,6,.76)";
+  ctx.lineWidth = 18;
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = state.visual.attack?.hit ? 12 : 10;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,245,.92)";
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  if (motion.phase !== "contact") {
+    const echoAngle = blade.angle - blade.swingSide * 0.43;
+    ctx.globalAlpha *= 0.42;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 7;
+    line(ctx, blade.hand, {
+      x: blade.hand.x + Math.cos(echoAngle) * 59,
+      y: blade.hand.y + Math.sin(echoAngle) * 59,
+    });
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPlayer(ctx, state, now, art, dynamics = null) {
   const point = projectWorld(state.player);
   const boss = projectWorld(state.boss);
   const blade = classicBladeContactPlan(state, now);
@@ -971,12 +1200,15 @@ function drawPlayer(ctx, state, now, art) {
   ctx.fillStyle = "rgba(0,0,0,.58)";
   ellipse(ctx, { x: point.x, y: point.y + 4 }, 20, 7);
   ctx.fill();
+  drawSwingTrail(ctx, state, blade);
   const facing = boss.x >= point.x ? 1 : -1;
-  const movementLean = clamp(state.player.lastMove?.x || 0, -1, 1) * -0.07;
+  const movementLean = clamp(state.player.lastMove?.x || 0, -1, 1) * -0.07
+    + (dynamics?.springValue(0) || 0);
   const dashLean = state.visual.lastDash ? facing * -0.06 : 0;
+  const attackLean = blade.motion.bodyLean * blade.swingSide;
   drawImagePart(ctx, art, art?.images?.player, CLASSIC_ART_PARTS.player.cloak, point, {
     anchor: "foot",
-    rotation: movementLean + dashLean,
+    rotation: movementLean + dashLean + attackLean,
     scaleX: facing * 0.61,
     scaleY: 0.61,
     alpha: blinking ? 0.45 : 1,
@@ -989,6 +1221,7 @@ function drawPlayer(ctx, state, now, art) {
   ctx.stroke();
 
   ctx.translate(point.x, point.y);
+  ctx.rotate(attackLean);
   ctx.fillStyle = "#2b2924";
   ctx.strokeStyle = "#13110e";
   ctx.lineWidth = 3;
@@ -1017,8 +1250,12 @@ function drawPlayer(ctx, state, now, art) {
   ctx.save();
   ctx.translate(point.x, point.y - 29);
   ctx.rotate(angle);
-  ctx.strokeStyle = "#e8e0d0";
-  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = "rgba(9,7,6,.88)";
+  ctx.lineWidth = 10;
+  line(ctx, { x: 4, y: 0 }, { x: bladeLength, y: 0 });
+  ctx.stroke();
+  ctx.strokeStyle = state.visual.attack?.hit ? "#fffdf0" : "#e8e0d0";
+  ctx.lineWidth = 5.5;
   line(ctx, { x: 4, y: 0 }, { x: bladeLength, y: 0 });
   ctx.stroke();
   ctx.strokeStyle = COLORS.brassLight;
@@ -1026,20 +1263,6 @@ function drawPlayer(ctx, state, now, art) {
   line(ctx, { x: 9, y: -7 }, { x: 9, y: 7 });
   ctx.stroke();
   ctx.restore();
-
-  if (state.visual.attack) {
-    const alpha = clamp(state.visual.attack.remaining / 0.24, 0, 1);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(point.x, point.y - 28);
-    ctx.rotate(angle);
-    ctx.strokeStyle = state.visual.attack.hit ? COLORS.fire : COLORS.white;
-    ctx.lineWidth = state.visual.attack.hit ? 5 : 3;
-    ctx.beginPath();
-    ctx.arc(13, 0, Math.max(51, bladeLength + 6), -0.68, 0.68);
-    ctx.stroke();
-    ctx.restore();
-  }
 }
 
 function drawImpact(ctx, state, now, art) {
@@ -1051,22 +1274,38 @@ function drawImpact(ctx, state, now, art) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = impact.tone === "core" ? 8 : 5;
   const radius = 14 + (1 - alpha) * 44;
   ellipse(ctx, point, radius, radius * 0.54);
   ctx.stroke();
+  if (impact.tone === "core") {
+    ctx.globalAlpha = Math.min(1, alpha * 1.35);
+    ctx.strokeStyle = "#fffdf3";
+    ctx.lineWidth = 5;
+    lines(ctx, [
+      [{ x: point.x - radius * 0.72, y: point.y - radius * 0.42 }, { x: point.x + radius * 0.72, y: point.y + radius * 0.42 }],
+      [{ x: point.x - radius * 0.72, y: point.y + radius * 0.42 }, { x: point.x + radius * 0.72, y: point.y - radius * 0.42 }],
+    ]);
+    ctx.stroke();
+  }
   const impactImage = art?.images?.impact;
+  const duration = impact.tone === "core" ? 0.3 : 0.24;
+  const age = clamp(duration - impact.remaining, 0, duration);
+  const blade = classicBladeContactPlan(state, now);
+  const burstAngle = Math.atan2(point.y - blade.hand.y, point.x - blade.hand.x);
+  const spreadAngles = [-0.86, -0.43, -0.08, 0.41, 0.79];
   for (let index = 0; index < 5; index += 1) {
-    const angle = now * 5 + (Math.PI * 2 * index) / 5;
+    const angle = burstAngle + spreadAngles[index];
+    const speed = (impact.tone === "core" ? 176 : 118) * (0.82 + index * 0.055);
     const shardPoint = {
-      x: point.x + Math.cos(angle) * radius,
-      y: point.y + Math.sin(angle) * radius * 0.45,
+      x: point.x + Math.cos(angle) * speed * age,
+      y: point.y + Math.sin(angle) * speed * age + 250 * age * age,
     };
     const part = CLASSIC_ART_PARTS.impact[`shard${index + 1}`];
     const usedArt = drawImagePart(ctx, art, impactImage, part, shardPoint, {
       anchor: "root",
-      rotation: angle + (1 - alpha) * 0.7,
-      scaleX: 0.24 + (1 - alpha) * 0.12,
+      rotation: angle + age * (index % 2 ? -9 : 10),
+      scaleX: 0.2 + (1 - alpha) * 0.13,
       alpha,
     });
     if (!usedArt) {
@@ -1074,6 +1313,39 @@ function drawImpact(ctx, state, now, art) {
       ctx.fillRect(shardPoint.x - 2, shardPoint.y - 2, 4, 4);
     }
   }
+  ctx.restore();
+}
+
+function drawDynamicParticles(ctx, dynamics) {
+  if (!dynamics || dynamics.particleCount <= 0) return;
+  ctx.save();
+  ctx.fillStyle = COLORS.fire;
+  ctx.strokeStyle = "rgba(197,92,50,.9)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  let particleAlpha = 0;
+  dynamics.forEachParticle((_index, x, y, rotation, alpha, progress) => {
+    const size = mix(4.8, 1.2, progress);
+    const cosine = Math.cos(rotation);
+    const sine = Math.sin(rotation);
+    const px = (localX, localY) => ({
+      x: x + localX * cosine - localY * sine,
+      y: y + localX * sine + localY * cosine,
+    });
+    const a = px(size, 0);
+    const b = px(0, size * 0.42);
+    const c = px(-size, 0);
+    const d = px(0, -size * 0.42);
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(c.x, c.y);
+    ctx.lineTo(d.x, d.y);
+    ctx.closePath();
+    particleAlpha = Math.max(particleAlpha, alpha);
+  });
+  ctx.globalAlpha = particleAlpha;
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -1089,6 +1361,103 @@ function drawCoreClosureWarning(ctx, state) {
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.restore();
+}
+
+function drawGroundHint(ctx, at, label, color, direction = 0) {
+  ctx.save();
+  ctx.translate(at.x, at.y);
+  ctx.transform(1, 0, 0.18, 0.72, 0, 0);
+  ctx.font = "900 23px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(8,7,6,.88)";
+  ctx.lineWidth = 7;
+  ctx.strokeText(label, 0, 0);
+  ctx.fillStyle = color;
+  ctx.fillText(label, 0, 0);
+  if (direction) {
+    ctx.strokeStyle = "rgba(8,7,6,.82)";
+    ctx.lineWidth = 10;
+    lines(ctx, [
+      [{ x: direction * 72, y: -10 }, { x: direction * 94, y: 0 }],
+      [{ x: direction * 72, y: 10 }, { x: direction * 94, y: 0 }],
+    ]);
+    ctx.stroke();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 5;
+    lines(ctx, [
+      [{ x: direction * 72, y: -10 }, { x: direction * 94, y: 0 }],
+      [{ x: direction * 72, y: 10 }, { x: direction * 94, y: 0 }],
+    ]);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+export function classicFirstRunGuidanceStage(state) {
+  if (state.round !== 1 || state.phase === PHASE.GAME_OVER || state.phase === PHASE.WAITING) {
+    return null;
+  }
+  const elapsed = Number.isFinite(state.elapsed) ? state.elapsed : 0;
+  if (
+    state.phase === PHASE.EXPLORE &&
+    elapsed <= 3.4 &&
+    state.memory.length === 0 &&
+    !state.lock
+  ) {
+    return "escape";
+  }
+  if (
+    state.lock &&
+    state.predictedSide &&
+    (state.phase === PHASE.COMBINE || state.phase === PHASE.LOCK || state.phase === PHASE.PREDICTION)
+  ) {
+    return "opposite";
+  }
+  if (state.phase === PHASE.CORE_OPEN && state.stats?.coreHits === 0) return "core";
+  return null;
+}
+
+function drawFirstRunGuidance(ctx, state, now) {
+  const stage = classicFirstRunGuidanceStage(state);
+  if (!stage) return;
+  const player = projectWorld(state.player);
+  if (stage === "escape") {
+    const pulse = 0.78 + Math.sin(now * 9) * 0.14;
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    drawGroundHint(
+      ctx,
+      { x: player.x, y: Math.min(620, player.y + 58) },
+      "WASD · 주홍선 밖으로",
+      COLORS.enamelLight,
+    );
+    ctx.restore();
+    return;
+  }
+
+  if (stage === "opposite") {
+    const direction = state.predictedSide === "right" ? -1 : 1;
+    const origin = projectWorld(state.lock.origin || state.boss);
+    drawGroundHint(
+      ctx,
+      { x: clamp(origin.x + direction * 155, 175, 1105), y: clamp(origin.y + 116, 190, 620) },
+      "반대로",
+      COLORS.enamelLight,
+      direction,
+    );
+    return;
+  }
+
+  if (stage === "core") {
+    drawGroundHint(
+      ctx,
+      { x: player.x, y: Math.min(620, player.y + 58) },
+      "J · 순백 코어",
+      "#fffdf1",
+    );
+  }
 }
 
 function drawMinimalGameOver(ctx, state) {
@@ -1123,7 +1492,7 @@ function waitingState() {
   };
 }
 
-export function renderGame(ctx, state, { now = 0, art = null } = {}) {
+export function renderGame(ctx, state, { now = 0, art = null, dynamics = null } = {}) {
   ctx.save();
   ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
   ctx.fillStyle = COLORS.deepSoot;
@@ -1135,9 +1504,12 @@ export function renderGame(ctx, state, { now = 0, art = null } = {}) {
   drawKilnTarget(ctx, scene, now, art);
   drawDashSkid(ctx, scene);
   drawCoreClosureWarning(ctx, scene);
-  drawBoss(ctx, scene, now, art);
-  drawPlayer(ctx, scene, now, art);
+  drawCoreReflection(ctx, scene, now);
+  drawBoss(ctx, scene, now, art, dynamics);
+  drawPlayer(ctx, scene, now, art, dynamics);
   drawImpact(ctx, scene, now, art);
+  drawDynamicParticles(ctx, dynamics);
+  drawFirstRunGuidance(ctx, scene, now);
   if (state.phase === PHASE.GAME_OVER) drawMinimalGameOver(ctx, state);
   ctx.restore();
 }
@@ -1148,6 +1520,16 @@ export function createRenderer(canvas) {
   }
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context is unavailable");
+  const reducedMotionQuery = typeof globalThis.matchMedia === "function"
+    ? globalThis.matchMedia("(prefers-reduced-motion: reduce)")
+    : null;
+  const dynamics = createVisualDynamics({
+    springs: [
+      { frequency: 17, dampingRatio: 0.58 },
+      { frequency: 22, dampingRatio: 0.38 },
+    ],
+    reducedMotion: Boolean(reducedMotionQuery?.matches),
+  });
 
   const renderer = {
     isReady: true,
@@ -1158,11 +1540,55 @@ export function createRenderer(canvas) {
       assetCount: 0,
       drawImages: 0,
       dpr: 1,
+      particles: 0,
+      visualPhysics: "spring-ballistic",
     },
     onStatusChange: null,
   };
   let images = null;
   let loadGeneration = 0;
+  let previousNow = null;
+
+  function updateDynamics(state, now) {
+    const events = Array.isArray(state.events) ? state.events : [];
+    if (events.some((event) => event.type === "start" || event.type === "restart")) {
+      dynamics.reset();
+    }
+    dynamics.setReducedMotion(Boolean(reducedMotionQuery?.matches));
+
+    const blade = classicBladeContactPlan(state, now);
+    for (const event of events) {
+      if (event.type !== "core_hit" && event.type !== "armor_hit") continue;
+      const point = classicImpactScreenAnchor(state, now);
+      if (!point) continue;
+      dynamics.spawnOnce(`${event.type}:${event.id}`, {
+        seed: Number.isFinite(event.id) ? event.id : state.eventSerial,
+        x: point.x,
+        y: point.y,
+        directionX: point.x - blade.hand.x,
+        directionY: point.y - blade.hand.y,
+        count: event.type === "core_hit" ? 12 : 7,
+        speed: event.type === "core_hit" ? 188 : 126,
+        spread: event.type === "core_hit" ? 1.42 : 0.94,
+        duration: event.type === "core_hit" ? 0.38 : 0.26,
+        gravity: 270,
+      });
+    }
+
+    const delta = previousNow == null ? 1 / 60 : Math.max(0, now - previousNow);
+    previousNow = now;
+    const dashDirection = state.visual?.lastDash
+      ? Math.sign((state.visual.lastDash.to?.x || 0) - (state.visual.lastDash.from?.x || 0))
+      : 0;
+    const movementTarget = clamp(state.player?.lastMove?.x || 0, -1, 1) * -0.08
+      + dashDirection * -0.07;
+    const base = projectWorld(state.boss || { x: 0, y: 0 });
+    const target = state.lock?.zone ? projectWorld(state.lock.zone) : { x: base.x + 1, y: base.y };
+    const bossDirection = target.x >= base.x ? 1 : -1;
+    const impactTarget = state.visual?.impact?.tone === "core" ? bossDirection * 0.14 : 0;
+    dynamics.step(delta, [movementTarget, impactTarget]);
+    renderer.info.particles = dynamics.particleCount;
+  }
 
   async function refreshArt() {
     const generation = ++loadGeneration;
@@ -1204,10 +1630,14 @@ export function createRenderer(canvas) {
   function render(state, options = {}) {
     renderer.info.drawImages = 0;
     resize();
+    const now = Number.isFinite(options.now) ? options.now : 0;
+    updateDynamics(state, now);
     ctx.setTransform(canvas.width / LOGICAL_WIDTH, 0, 0, canvas.height / LOGICAL_HEIGHT, 0, 0);
     renderGame(ctx, state, {
       ...options,
+      now,
       art: images ? { images, metrics: renderer.info } : null,
+      dynamics,
     });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }

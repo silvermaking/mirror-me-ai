@@ -23,7 +23,7 @@ function coreContactState() {
     },
     visual: {
       ...state.visual,
-      attack: { hit: true, armor: false, remaining: 0.12 },
+      attack: { hit: true, armor: false, remaining: 0.239 },
       impact: { x: state.boss.x, y: state.boss.y, tone: "core", remaining: 0.3 },
       shake: 0,
     },

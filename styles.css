@@ -430,7 +430,7 @@ button:focus-visible { outline: 3px solid var(--ivory); outline-offset: 3px; }
 }
 
 .start-copy {
-  width: min(37rem, 82%);
+  width: min(31rem, 64%);
   padding: 0 0 .2rem;
   color: #e7dcc6;
   background: none;
@@ -452,7 +452,7 @@ button:focus-visible { outline: 3px solid var(--ivory); outline-offset: 3px; }
 .game-hook { color: #cbbda5; }
 .game-hook strong { color: #eee7d9; }
 .start-rule {
-  max-width: 35rem;
+  max-width: 31rem;
   border-color: rgba(196, 156, 80, .34);
   color: #b9aa91;
 }
@@ -518,7 +518,7 @@ button:focus-visible { outline: 3px solid var(--ivory); outline-offset: 3px; }
 
 @media (max-width: 420px), (max-height: 260px) {
   .start-overlay { padding: .45rem; }
-  .start-copy { width: 72%; }
+  .start-copy { width: 68%; }
   .start-kicker { display: none; }
   .start-copy h1 { font-size: clamp(1.25rem, 8vh, 2rem); }
   .game-hook { margin-top: .2rem; font-size: .48rem; line-height: 1.3; }
