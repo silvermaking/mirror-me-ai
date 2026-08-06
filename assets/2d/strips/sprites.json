@@ -1,0 +1,842 @@
+{
+  "version": 4,
+  "source": "approved-imagegen-rig-v5-directional-cuffs",
+  "sources": {
+    "v2:player-idle-authority-alpha.png": {
+      "file": "assets/2d/master/sprite-rig-v2/player-idle-authority-alpha.png",
+      "sha256": "ae86bffbd70b17d154b1532a4e30516e7692232de9cdef6c7674c95003c74050",
+      "width": 1672,
+      "height": 941
+    },
+    "v2:player-contact-body-alpha.png": {
+      "file": "assets/2d/master/sprite-rig-v2/player-contact-body-alpha.png",
+      "sha256": "0cbce1ccfa6a8196b413acdf9487d411ea39486ef37894aaad14506096597aac",
+      "width": 1672,
+      "height": 941
+    },
+    "v2:player-blade-only-alpha.png": {
+      "file": "assets/2d/master/sprite-rig-v2/player-blade-only-alpha.png",
+      "sha256": "84c7f1c38562962f75702c3cca88a664c3e5c08180e159b5761b1bba4c7bc48b",
+      "width": 1672,
+      "height": 941
+    },
+    "v2:boss-idle-authority-alpha.png": {
+      "file": "assets/2d/master/sprite-rig-v2/boss-idle-authority-alpha.png",
+      "sha256": "53c50cd567574dd75c9f65004ef087e54599ce94aa3958ae3e38ee98aef8d0d9",
+      "width": 1672,
+      "height": 941
+    },
+    "v4:boss-body-left-armfree-alpha.png": {
+      "file": "assets/2d/master/sprite-rig-v4/boss-body-left-armfree-alpha.png",
+      "sha256": "85db7172e1877dcd7eeebb3f02e0222507a2c96cae4b85a24dfb97116125682b",
+      "width": 1672,
+      "height": 941
+    },
+    "v4:boss-body-right-armfree-alpha.png": {
+      "file": "assets/2d/master/sprite-rig-v4/boss-body-right-armfree-alpha.png",
+      "sha256": "3063d67f0815b3cbe6848ad2310a904be6bef4c84779bf8e3bcf824e36d654bd",
+      "width": 1672,
+      "height": 941
+    },
+    "v2:boss-shaft-tip-kit-alpha.png": {
+      "file": "assets/2d/master/sprite-rig-v2/boss-shaft-tip-kit-alpha.png",
+      "sha256": "917c7c188bb1760c5c91b18a225e76d9583a6b24c4e3328e3b86b410b3fb3d3e",
+      "width": 1672,
+      "height": 941
+    },
+    "v5:boss-joint-housings-v5-alpha.png": {
+      "file": "assets/2d/master/sprite-rig-v5/boss-joint-housings-v5-alpha.png",
+      "sha256": "9b3254fba95aa507ff0c4294cc16d1327cc3eb3a8cdd127a0fb1027c9a701643",
+      "width": 1536,
+      "height": 1024
+    }
+  },
+  "masterCell": [
+    512,
+    384
+  ],
+  "runtimeCell": [
+    256,
+    192
+  ],
+  "sheets": {
+    "player-body": {
+      "file": "player-body.png",
+      "width": 512,
+      "height": 192,
+      "frameWidth": 256,
+      "frameHeight": 192,
+      "frameCount": 2
+    },
+    "player-blade": {
+      "file": "player-blade.png",
+      "width": 256,
+      "height": 192,
+      "frameWidth": 256,
+      "frameHeight": 192,
+      "frameCount": 1
+    },
+    "boss-body": {
+      "file": "boss-body.png",
+      "width": 1280,
+      "height": 192,
+      "frameWidth": 256,
+      "frameHeight": 192,
+      "frameCount": 5
+    },
+    "driver-shaft": {
+      "file": "driver-shaft.png",
+      "width": 256,
+      "height": 192,
+      "frameWidth": 256,
+      "frameHeight": 192,
+      "frameCount": 1
+    },
+    "driver-tip": {
+      "file": "driver-tip.png",
+      "width": 256,
+      "height": 192,
+      "frameWidth": 256,
+      "frameHeight": 192,
+      "frameCount": 1
+    },
+    "driver-cuff": {
+      "file": "driver-cuff.png",
+      "width": 512,
+      "height": 192,
+      "frameWidth": 256,
+      "frameHeight": 192,
+      "frameCount": 2
+    }
+  },
+  "frames": {
+    "player-idle": {
+      "sheet": "player-body",
+      "rect": [
+        0,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "feet": [
+          118.2571,
+          179.6571
+        ],
+        "sword_grip": [
+          134.7143,
+          89.1429
+        ]
+      },
+      "paintBounds": [
+        39,
+        16,
+        172,
+        164
+      ],
+      "index": 0
+    },
+    "player-contact": {
+      "sheet": "player-body",
+      "rect": [
+        256,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "feet": [
+          140.1018,
+          177.96
+        ],
+        "sword_grip": [
+          207.5927,
+          64.8545
+        ]
+      },
+      "paintBounds": [
+        25,
+        19,
+        195,
+        162
+      ],
+      "index": 1
+    },
+    "player-blade": {
+      "sheet": "player-blade",
+      "rect": [
+        0,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "sword_grip": [
+          8.5895,
+          95.4526
+        ],
+        "sword_tip": [
+          253.8105,
+          95.4526
+        ]
+      },
+      "paintBounds": [
+        1,
+        88,
+        253,
+        15
+      ],
+      "index": 0
+    },
+    "boss-idle": {
+      "sheet": "boss-body",
+      "rect": [
+        0,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "root": [
+          132.8,
+          172.0
+        ],
+        "driver_joint": [
+          190.8,
+          98.8
+        ],
+        "core_center": [
+          134.0,
+          102.0
+        ],
+        "brace_contact": [
+          72.8,
+          142.0
+        ],
+        "memory_slot_1": [
+          100.0,
+          20.0
+        ],
+        "memory_slot_2": [
+          126.4,
+          14.4
+        ],
+        "memory_slot_3": [
+          151.2,
+          22.0
+        ]
+      },
+      "paintBounds": [
+        32,
+        12,
+        197,
+        167
+      ],
+      "index": 0
+    },
+    "boss-lock-left": {
+      "sheet": "boss-body",
+      "rect": [
+        256,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "root": [
+          117.76,
+          169.2533
+        ],
+        "driver_joint": [
+          132.2667,
+          120.6133
+        ],
+        "core_center": [
+          101.9733,
+          109.0933
+        ],
+        "brace_contact": [
+          39.2533,
+          154.32
+        ],
+        "memory_slot_1": [
+          75.52,
+          27.6
+        ],
+        "memory_slot_2": [
+          104.5333,
+          21.2
+        ],
+        "memory_slot_3": [
+          133.5467,
+          22.9067
+        ]
+      },
+      "paintBounds": [
+        10,
+        7,
+        214,
+        165
+      ],
+      "index": 1
+    },
+    "boss-miss-left": {
+      "sheet": "boss-body",
+      "rect": [
+        512,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "root": [
+          128.0,
+          164.6882
+        ],
+        "core_center": [
+          129.1294,
+          117.6294
+        ],
+        "brace_contact": [
+          211.9529,
+          152.2647
+        ],
+        "memory_slot_1": [
+          78.6824,
+          60.7824
+        ],
+        "memory_slot_2": [
+          103.1529,
+          47.2294
+        ],
+        "memory_slot_3": [
+          127.2471,
+          49.1118
+        ]
+      },
+      "paintBounds": [
+        45,
+        33,
+        190,
+        135
+      ],
+      "index": 2
+    },
+    "boss-lock-right": {
+      "sheet": "boss-body",
+      "rect": [
+        768,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "root": [
+          121.656,
+          169.728
+        ],
+        "driver_joint": [
+          218.04,
+          122.88
+        ],
+        "core_center": [
+          121.656,
+          103.296
+        ],
+        "brace_contact": [
+          43.704,
+          152.832
+        ],
+        "memory_slot_1": [
+          87.48,
+          31.104
+        ],
+        "memory_slot_2": [
+          113.976,
+          23.04
+        ],
+        "memory_slot_3": [
+          143.16,
+          24.192
+        ]
+      },
+      "paintBounds": [
+        13,
+        10,
+        217,
+        163
+      ],
+      "index": 3
+    },
+    "boss-miss-right": {
+      "sheet": "boss-body",
+      "rect": [
+        1024,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "root": [
+          143.2,
+          152.448
+        ],
+        "core_center": [
+          142.048,
+          88.704
+        ],
+        "brace_contact": [
+          44.896,
+          145.536
+        ],
+        "memory_slot_1": [
+          81.76,
+          29.952
+        ],
+        "memory_slot_2": [
+          105.184,
+          21.888
+        ],
+        "memory_slot_3": [
+          130.912,
+          14.976
+        ]
+      },
+      "paintBounds": [
+        28,
+        1,
+        186,
+        160
+      ],
+      "index": 4
+    },
+    "driver-shaft": {
+      "sheet": "driver-shaft",
+      "rect": [
+        0,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "shaft_in": [
+          13.347,
+          94.5983
+        ],
+        "shaft_out": [
+          247.2479,
+          94.5983
+        ]
+      },
+      "paintBounds": [
+        5,
+        78,
+        248,
+        34
+      ],
+      "index": 0
+    },
+    "driver-tip": {
+      "sheet": "driver-tip",
+      "rect": [
+        0,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "tip_socket": [
+          7.7804,
+          90.0549
+        ],
+        "driver_tip": [
+          244.7059,
+          90.0549
+        ]
+      },
+      "paintBounds": [
+        0,
+        76,
+        245,
+        40
+      ],
+      "index": 0
+    },
+    "driver-cuff-left": {
+      "sheet": "driver-cuff",
+      "rect": [
+        0,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "driver_joint": [
+          96.3381,
+          95.8021
+        ],
+        "shaft_in": [
+          157.3031,
+          95.8021
+        ]
+      },
+      "paintBounds": [
+        89,
+        62,
+        75,
+        63
+      ],
+      "presentationScale": 1.0,
+      "index": 0
+    },
+    "driver-cuff-right": {
+      "sheet": "driver-cuff",
+      "rect": [
+        256,
+        0,
+        256,
+        192
+      ],
+      "anchors": {
+        "driver_joint": [
+          109.4021,
+          99.3649
+        ],
+        "shaft_in": [
+          150.1773,
+          99.3649
+        ]
+      },
+      "paintBounds": [
+        103,
+        76,
+        53,
+        46
+      ],
+      "presentationScale": 1.0,
+      "index": 1
+    }
+  },
+  "sourceFrames": {
+    "player-idle": {
+      "source": "v2:player-idle-authority-alpha.png",
+      "sourceRect": [
+        100,
+        160,
+        600,
+        560
+      ],
+      "anchors": {
+        "feet": [
+          372,
+          684
+        ],
+        "sword_grip": [
+          420,
+          420
+        ]
+      }
+    },
+    "player-contact": {
+      "source": "v2:player-contact-body-alpha.png",
+      "sourceRect": [
+        250,
+        80,
+        1100,
+        745
+      ],
+      "anchors": {
+        "feet": [
+          852,
+          806
+        ],
+        "sword_grip": [
+          1142,
+          320
+        ]
+      }
+    },
+    "player-blade": {
+      "source": "v2:player-blade-only-alpha.png",
+      "sourceRect": [
+        100,
+        400,
+        1520,
+        140
+      ],
+      "anchors": {
+        "sword_grip": [
+          151,
+          468
+        ],
+        "sword_tip": [
+          1607,
+          468
+        ]
+      }
+    },
+    "boss-idle": {
+      "source": "v2:boss-idle-authority-alpha.png",
+      "sourceRect": [
+        20,
+        245,
+        540,
+        480
+      ],
+      "anchors": {
+        "root": [
+          302,
+          675
+        ],
+        "driver_joint": [
+          447,
+          492
+        ],
+        "core_center": [
+          305,
+          500
+        ],
+        "brace_contact": [
+          152,
+          600
+        ],
+        "memory_slot_1": [
+          220,
+          295
+        ],
+        "memory_slot_2": [
+          286,
+          281
+        ],
+        "memory_slot_3": [
+          348,
+          300
+        ]
+      }
+    },
+    "boss-lock-left": {
+      "source": "v4:boss-body-left-armfree-alpha.png",
+      "sourceRect": [
+        130,
+        200,
+        600,
+        440
+      ],
+      "anchors": {
+        "root": [
+          406,
+          592
+        ],
+        "driver_joint": [
+          440,
+          478
+        ],
+        "core_center": [
+          369,
+          451
+        ],
+        "brace_contact": [
+          222,
+          557
+        ],
+        "memory_slot_1": [
+          307,
+          260
+        ],
+        "memory_slot_2": [
+          375,
+          245
+        ],
+        "memory_slot_3": [
+          443,
+          249
+        ]
+      }
+    },
+    "boss-miss-left": {
+      "source": "v4:boss-body-left-armfree-alpha.png",
+      "sourceRect": [
+        980,
+        210,
+        680,
+        400
+      ],
+      "anchors": {
+        "root": [
+          1320,
+          593
+        ],
+        "core_center": [
+          1323,
+          468
+        ],
+        "brace_contact": [
+          1543,
+          560
+        ],
+        "memory_slot_1": [
+          1189,
+          317
+        ],
+        "memory_slot_2": [
+          1254,
+          281
+        ],
+        "memory_slot_3": [
+          1318,
+          286
+        ]
+      }
+    },
+    "boss-lock-right": {
+      "source": "v4:boss-body-right-armfree-alpha.png",
+      "sourceRect": [
+        20,
+        200,
+        650,
+        500
+      ],
+      "anchors": {
+        "root": [
+          329,
+          642
+        ],
+        "driver_joint": [
+          580,
+          520
+        ],
+        "core_center": [
+          329,
+          469
+        ],
+        "brace_contact": [
+          126,
+          598
+        ],
+        "memory_slot_1": [
+          240,
+          281
+        ],
+        "memory_slot_2": [
+          309,
+          260
+        ],
+        "memory_slot_3": [
+          385,
+          263
+        ]
+      }
+    },
+    "boss-miss-right": {
+      "source": "v4:boss-body-right-armfree-alpha.png",
+      "sourceRect": [
+        780,
+        210,
+        520,
+        500
+      ],
+      "anchors": {
+        "root": [
+          1080,
+          607
+        ],
+        "core_center": [
+          1077,
+          441
+        ],
+        "brace_contact": [
+          824,
+          589
+        ],
+        "memory_slot_1": [
+          920,
+          288
+        ],
+        "memory_slot_2": [
+          981,
+          267
+        ],
+        "memory_slot_3": [
+          1048,
+          249
+        ]
+      }
+    },
+    "driver-shaft": {
+      "source": "v2:boss-shaft-tip-kit-alpha.png",
+      "sourceRect": [
+        250,
+        230,
+        1170,
+        180
+      ],
+      "anchors": {
+        "shaft_in": [
+          311,
+          315
+        ],
+        "shaft_out": [
+          1380,
+          315
+        ]
+      }
+    },
+    "driver-tip": {
+      "source": "v2:boss-shaft-tip-kit-alpha.png",
+      "sourceRect": [
+        380,
+        580,
+        1020,
+        160
+      ],
+      "anchors": {
+        "tip_socket": [
+          411,
+          636
+        ],
+        "driver_tip": [
+          1355,
+          636
+        ]
+      }
+    },
+    "driver-cuff-left": {
+      "source": "v5:boss-joint-housings-v5-alpha.png",
+      "sourceRect": [
+        0,
+        27,
+        768,
+        970
+      ],
+      "anchors": {
+        "driver_joint": [
+          224,
+          511
+        ],
+        "shaft_in": [
+          532,
+          511
+        ]
+      }
+    },
+    "driver-cuff-right": {
+      "source": "v5:boss-joint-housings-v5-alpha.png",
+      "sourceRect": [
+        768,
+        27,
+        768,
+        970
+      ],
+      "anchors": {
+        "driver_joint": [
+          1058,
+          529
+        ],
+        "shaft_in": [
+          1264,
+          529
+        ]
+      }
+    }
+  }
+}
