@@ -9,7 +9,7 @@ import {
   updateGame,
 } from "./game-core.mjs";
 import { createAudioManager } from "./audio.mjs";
-import { createRenderer } from "./render-classic.mjs";
+import { createRenderer } from "./render-sprite.mjs";
 
 const canvas = document.querySelector("canvas#game");
 const startButton = document.querySelector("button#start-button");

@@ -13,20 +13,32 @@ import { spawnSync } from "node:child_process";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const output = join(root, ".pages-dist");
+// CI uses HEAD.  A named tree lets the same complete variant build verify an
+// uncommitted candidate without touching the developer's real index.
+const currentRef = process.env.PAGES_CURRENT_REF || "HEAD";
 
 const variants = [
   {
     id: "current",
     label: "최초판 + authored 2D 에셋",
-    ref: "HEAD",
+    ref: currentRef,
     target: "",
     paths: ["index.html", "styles.css", "src", "assets/2d"],
     required: [
       "index.html",
       "src/main.js",
+      "src/render-sprite.mjs",
       "src/render-classic.mjs",
+      "src/sprite-art-contract.mjs",
       "src/visual-dynamics.mjs",
       "src/classic-art-contract.mjs",
+      "assets/2d/strips/sprites.json",
+      "assets/2d/strips/player-body.png",
+      "assets/2d/strips/player-blade.png",
+      "assets/2d/strips/boss-body.png",
+      "assets/2d/strips/driver-shaft.png",
+      "assets/2d/strips/driver-tip.png",
+      "assets/2d/strips/driver-cuff.png",
       "assets/2d/classic/boss-parts.svg",
       "assets/2d/classic/driver-parts.svg",
       "assets/2d/classic/player-cloak.svg",
@@ -117,8 +129,8 @@ if (!threeIndex.includes('type="importmap"')) {
 }
 
 const currentMain = readFileSync(join(output, "src/main.js"), "utf8");
-if (!currentMain.includes('from "./render-classic.mjs"')) {
-  throw new Error("current build no longer points to the classic asset renderer");
+if (!currentMain.includes('from "./render-sprite.mjs"')) {
+  throw new Error("current build no longer points to the sprite renderer");
 }
 
 const manifest = {

@@ -2397,7 +2397,11 @@ function waitingState() {
   };
 }
 
-export function renderGame(ctx, state, { now = 0, art = null, dynamics = null } = {}) {
+function validCharacterLayer(layer) {
+  return Boolean(layer && typeof layer.drawBoss === "function" && typeof layer.drawPlayer === "function");
+}
+
+export function renderGame(ctx, state, { now = 0, art = null, dynamics = null, characterLayer = null } = {}) {
   ctx.save();
   ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
   ctx.fillStyle = COLORS.deepSoot;
@@ -2411,8 +2415,15 @@ export function renderGame(ctx, state, { now = 0, art = null, dynamics = null } 
   drawCoreApproachPath(ctx, scene, now);
   drawCoreClosureWarning(ctx, scene, now);
   drawCoreReflection(ctx, scene, now);
-  drawBoss(ctx, scene, now, art, dynamics);
-  drawPlayer(ctx, scene, now, art, dynamics);
+  // Stage, warnings, memory and impact keep their established coordinate
+  // path. A layer must replace both bodies or neither, preventing overlap.
+  if (validCharacterLayer(characterLayer)) {
+    characterLayer.drawBoss(ctx, scene, { now, art, dynamics });
+    characterLayer.drawPlayer(ctx, scene, { now, art, dynamics });
+  } else {
+    drawBoss(ctx, scene, now, art, dynamics);
+    drawPlayer(ctx, scene, now, art, dynamics);
+  }
   drawImpact(ctx, scene, now, art);
   drawDynamicParticles(ctx, dynamics);
   drawFirstRunGuidance(ctx, scene, now);
@@ -2420,7 +2431,7 @@ export function renderGame(ctx, state, { now = 0, art = null, dynamics = null } 
   ctx.restore();
 }
 
-export function createRenderer(canvas) {
+export function createRenderer(canvas, { characterLayer = null } = {}) {
   if (!canvas || typeof canvas.getContext !== "function") {
     throw new TypeError("Canvas element is required");
   }
@@ -2454,10 +2465,12 @@ export function createRenderer(canvas) {
       playerDrawOrder: null,
       playerArmAnchorError: null,
       readyBladeOutsideCssAt320: null,
+      characterLayer: validCharacterLayer(characterLayer) ? "override" : "classic",
     },
     onStatusChange: null,
   };
   let images = null;
+  let activeCharacterLayer = validCharacterLayer(characterLayer) ? characterLayer : null;
   let loadGeneration = 0;
   let previousNow = null;
 
@@ -2557,6 +2570,7 @@ export function createRenderer(canvas) {
       now,
       art: images ? { images, metrics: renderer.info } : null,
       dynamics,
+      characterLayer: activeCharacterLayer,
     });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
@@ -2564,6 +2578,11 @@ export function createRenderer(canvas) {
   renderer.render = render;
   renderer.resize = resize;
   renderer.retry = refreshArt;
+  renderer.setCharacterLayer = (nextLayer) => {
+    activeCharacterLayer = validCharacterLayer(nextLayer) ? nextLayer : null;
+    renderer.info.characterLayer = activeCharacterLayer ? "override" : "classic";
+    if (typeof renderer.onStatusChange === "function") renderer.onStatusChange();
+  };
   void refreshArt();
   return renderer;
 }

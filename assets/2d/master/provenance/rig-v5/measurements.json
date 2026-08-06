@@ -1,0 +1,110 @@
+{
+  "sourceSize": [
+    1536,
+    1024
+  ],
+  "equalSourceCells": [
+    {
+      "variant": "L",
+      "sourceRect": [
+        0,
+        27,
+        768,
+        970
+      ],
+      "alphaBBoxSource": [
+        187,
+        343,
+        377,
+        316
+      ],
+      "anchorsSource": {
+        "driver_joint": [
+          224,
+          511
+        ],
+        "shaft_in": [
+          532,
+          511
+        ]
+      },
+      "fitScale": 0.3958762886597938,
+      "placedMaster": [
+        104,
+        0
+      ],
+      "anchorsRuntime": {
+        "driver_joint": [
+          96.3381,
+          95.8021
+        ],
+        "shaft_in": [
+          157.3031,
+          95.8021
+        ]
+      },
+      "paintBoundsRuntime": [
+        89,
+        62,
+        75,
+        63
+      ],
+      "projectedPaintBBoxCss320": [
+        18.0,
+        15.12
+      ]
+    },
+    {
+      "variant": "R",
+      "sourceRect": [
+        768,
+        27,
+        768,
+        970
+      ],
+      "alphaBBoxSource": [
+        1026,
+        412,
+        266,
+        231
+      ],
+      "anchorsSource": {
+        "driver_joint": [
+          1058,
+          529
+        ],
+        "shaft_in": [
+          1264,
+          529
+        ]
+      },
+      "fitScale": 0.3958762886597938,
+      "placedMaster": [
+        104,
+        0
+      ],
+      "anchorsRuntime": {
+        "driver_joint": [
+          109.4021,
+          99.3649
+        ],
+        "shaft_in": [
+          150.1773,
+          99.3649
+        ]
+      },
+      "paintBoundsRuntime": [
+        103,
+        76,
+        53,
+        46
+      ],
+      "projectedPaintBBoxCss320": [
+        12.72,
+        11.04
+      ]
+    }
+  ],
+  "bossScale": 0.96,
+  "cssLogicalScaleAt320": 0.25
+}
