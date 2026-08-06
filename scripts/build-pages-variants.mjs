@@ -1,5 +1,6 @@
 import {
   closeSync,
+  cpSync,
   existsSync,
   mkdirSync,
   openSync,
@@ -55,6 +56,8 @@ const variants = [
       "assets/audio/sfx/core-open.wav",
       "assets/audio/sfx/core-contact.wav",
       "assets/audio/sfx/player-hit.wav",
+      "assets/audio/bgm/manifest.json",
+      "assets/audio/bgm/kiln-breath-loop.wav",
       "assets/2d/classic/boss-parts.svg",
       "assets/2d/classic/driver-parts.svg",
       "assets/2d/classic/player-cloak.svg",
@@ -104,21 +107,27 @@ function archiveVariant(variant) {
   const archive = join(output, `.${variant.id}.tar`);
   mkdirSync(destination, { recursive: true });
 
-  const archiveFd = openSync(archive, "w");
-  try {
-    run(
-      "git",
-      ["archive", "--format=tar", variant.ref, "--", ...variant.paths],
-      { encoding: null, stdio: ["ignore", archiveFd, "pipe"] },
-    );
-  } finally {
-    closeSync(archiveFd);
-  }
+  if (variant.ref === "WORKTREE") {
+    // Review builds must see an uncommitted candidate without changing HEAD;
+    // CI retains the archive path below and therefore validates its exact ref.
+    for (const path of variant.paths) cpSync(join(root, path), join(destination, path), { recursive: true });
+  } else {
+    const archiveFd = openSync(archive, "w");
+    try {
+      run(
+        "git",
+        ["archive", "--format=tar", variant.ref, "--", ...variant.paths],
+        { encoding: null, stdio: ["ignore", archiveFd, "pipe"] },
+      );
+    } finally {
+      closeSync(archiveFd);
+    }
 
-  try {
-    run("tar", ["-xf", archive, "-C", destination]);
-  } finally {
-    rmSync(archive, { force: true });
+    try {
+      run("tar", ["-xf", archive, "-C", destination]);
+    } finally {
+      rmSync(archive, { force: true });
+    }
   }
 
   for (const required of variant.required) {
