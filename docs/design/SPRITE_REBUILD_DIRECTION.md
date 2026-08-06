@@ -66,11 +66,12 @@
 
 - 전신 키포즈는 캐릭터의 무게 중심, 몸통 비틀림, 지지팔 압축, 망토와 큰 실루엣을 담당하며 `root` 또는 `feet` 기준으로 이동만 한다. 전신을 접촉점에 맞추기 위해 회전·확대·축소·미러링하지 않는다.
 - 플레이어의 검은 손그림 `blade` 레이어로 분리하고 `sword_grip` 한 관절에서만 회전한다. 대기·이동·cut·recoil에서는 기본 길이를 유지하고, 직접 접촉이 확정된 첫 48ms에만 기존 공격 접촉 계획이 계산한 거리까지 검날의 길이축 스미어를 허용한다. 검 폭, 손잡이, 플레이어 몸은 늘어나지 않는다.
-- 보스 파일드라이버는 손그림 `joint-cuff`, `telescoping-shaft`, `driver-tip` 레이어로 분리한다. `driver_joint`에서 LOCK 순간 한 번 정한 축으로만 회전하고, 중간 축만 길이 방향으로 장전·신장한다. 팁과 몸통은 비등방 변형하지 않는다.
-- `joint-cuff`는 고해상도 원본 크기와 무관하게 자산당 한 번 정한 고정 균일 표현 scale만 사용한다. 좌우·상태별 scale 변경이나 비등방 변형은 금지하며, 320×180 투영 외곽은 길이 34–46px·두께 18–26px 안에서 얼굴·코어·기억 명판을 가리지 않아야 한다.
+- 보스 파일드라이버는 손그림 `joint-cuff-left/right`, `telescoping-shaft`, `driver-tip` 레이어로 분리한다. `driver_joint`에서 LOCK 순간 한 번 정한 축으로만 회전하고, 중간 축만 길이 방향으로 장전·신장한다. 팁과 몸통은 비등방 변형하지 않는다.
+- 좌우 `joint-cuff`는 같은 파츠를 확대·축소하거나 미러링한 것이 아니라 각 LOCK 몸체에 이미 그려진 관절 질량을 이어받는 별도 authored 하우징이다. 런타임은 `lock.side`로 한 번 선택한 뒤 공통 body transform과 자산별 고정 균일 표현 scale만 사용하고, 상태 전환 중 scale·offset·미러링을 바꾸지 않는다.
+- 320×180 실제 투영에서 좌측 하우징의 불투명 외곽은 `16–19×15–18px`, 우측은 `10–13×10–13.5px`다. 두 하우징 모두 짧은 몸체 패드 하나와 샤프트 터널 하나만 가지며, 긴 슬리브나 또 하나의 팔처럼 보이거나 얼굴·코어·기억 명판을 가리면 실패다.
 - LOCK 뒤에는 관절 축, 케이블 방향, `driver_tip` 목표가 모두 고정된다. MISS는 같은 축에서 신장량만 바뀌며 표적을 추적하지 않는다.
 - 관절 접합부는 상아 커프와 먹빛 겹침 아래 가려 한 몸처럼 보여야 한다. 분리 파츠가 떠 있거나 단순 선·막대·도형으로 보이면 실패다.
-- arm-free MISS 몸체에는 보이지 않는 가짜 socket anchor를 만들지 않는다. 별도 `joint-cuff`의 `driver_joint`를 고정 LOCK 관절점에 같은 transform으로 1px 이내 배치하고, 320×180 실제 합성에서 투명 틈·커프 밖 샤프트 누출·축이 다시 꺾여 보이는 현상이 모두 없어야 통과한다.
+- arm-free MISS 몸체에는 보이지 않는 가짜 socket anchor를 만들지 않는다. 선택된 `joint-cuff-left/right`의 `driver_joint`를 고정 LOCK 관절점에 같은 transform으로 1px 이내 배치하고, `shaft_in`에서 샤프트가 시작되게 한다. 320×180 실제 합성에서 LOCK→MISS 관절 질량의 팝, 투명 틈, 커프 밖 샤프트 누출, 축이 다시 꺾여 보이는 현상이 모두 없어야 통과한다.
 - 이 예외는 검날의 짧은 접촉 스미어와 파일드라이버의 물리적 신장에만 허용한다. 몸통, 머리, 망토, 지지팔, 명판과 코어를 런타임 변형으로 대신하지 않는다.
 
 ### 원본과 빌드
@@ -80,7 +81,7 @@
 - 저장소에는 동작별 무손실 master frame, 고정 팔레트, anchor manifest와 결정적 strip build를 함께 보존한다. 지원되는 경우 레이어 원본도 함께 둔다.
 - 런타임은 동작별 투명 PNG strip과 JSON manifest를 저장소 상대 경로로 불러온다. 하나의 통짜 atlas, 런타임 CDN과 외부 요청은 사용하지 않는다.
 - 소스 셀은 512×384, 런타임 셀은 256×192를 기준으로 하며 공통 foot anchor는 각각 `(256,336)`, `(128,168)`이다.
-- 모든 프레임과 관절 파츠는 named anchor를 manifest에 기록한다. 플레이어 몸은 `feet`, `sword_grip`, 검 파츠는 `sword_grip`, `sword_tip`; 보스 몸은 `root`, `driver_joint`, `core_center`, `brace_contact`, `memory_slot_1..3`, 드라이버 파츠는 `driver_joint`, `driver_tip`을 가진다.
+- 모든 프레임과 관절 파츠는 named anchor를 manifest에 기록한다. 플레이어 몸은 `feet`, `sword_grip`, 검 파츠는 `sword_grip`, `sword_tip`; 보스 몸은 `root`, `driver_joint`, `core_center`, `brace_contact`, `memory_slot_1..3`; 좌우 커프는 `driver_joint`, `shaft_in`; 샤프트와 팁은 접속점과 `driver_tip`을 가진다.
 - 검날이 프레임에 포함되어도 `sword_grip`과 `sword_tip`은 생략하지 않는다. LOCK·prediction 프레임의 `driver_joint`와 `driver_tip`, miss-open·core-hit 프레임의 `core_center`는 필수다.
 - 렌더러는 몸 전체에 하나의 고정 scale과 무회전 body transform을 사용한다. 검과 드라이버만 위 관절 레이어 규칙으로 합성하며, 프레임별 임의 offset, 별도 가짜 접촉 좌표와 보스 좌우 미러링은 금지한다.
 - 플레이어 `feet`·게임 좌표·그림자 중심, prediction 해결 프레임의 합성된 `driver_tip`·LOCK 중심, 직접 타격 프레임의 합성된 `sword_tip`·`core_center`·충격점은 데스크톱과 320×180 실제 출력에서 각각 1px 이내여야 한다.
