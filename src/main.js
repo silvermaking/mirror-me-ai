@@ -10,6 +10,8 @@ import {
 } from "./game-core.mjs";
 import { createAudioManager } from "./audio.mjs";
 import { createRenderer } from "./render-sprite.mjs";
+import { combatRailPresentation, isReadDeath, retryPresentation } from "./ui-model.mjs";
+import { createTouchMovementLatch } from "./touch-movement-latch.mjs";
 
 const canvas = document.querySelector("canvas#game");
 const startButton = document.querySelector("button#start-button");
@@ -32,6 +34,13 @@ const gameOverTip = document.querySelector("#game-over-tip");
 const gameOverRun = document.querySelector("#game-over-run");
 const gameOverBest = document.querySelector("#game-over-best");
 const gameOverRestart = document.querySelector("#game-over-restart");
+const retryButton = document.querySelector("button#retry-button");
+const combatRail = document.querySelector("#combat-rail");
+const hudRound = document.querySelector("#hud-round");
+const hudShields = document.querySelector("#hud-shields");
+const hudBossHp = document.querySelector("#hud-boss-hp");
+const hudMemory = document.querySelector("#hud-memory");
+const deathReading = document.querySelector(".death-reading");
 
 if (!(canvas instanceof HTMLCanvasElement)) throw new Error("#game canvas is required");
 if (!(startButton instanceof HTMLButtonElement)) throw new Error("#start-button is required");
@@ -42,11 +51,18 @@ if (!(touchDpad instanceof HTMLDivElement)) throw new Error(".touch-dpad is requ
 if (!(touchActions instanceof HTMLDivElement)) throw new Error(".touch-actions is required");
 if (!(touchAttack instanceof HTMLButtonElement)) throw new Error(".touch-attack is required");
 if (!(touchDash instanceof HTMLButtonElement)) throw new Error(".touch-dash is required");
+if (!(retryButton instanceof HTMLButtonElement)) throw new Error("#retry-button is required");
+if (!(combatRail instanceof HTMLElement)) throw new Error("#combat-rail is required");
+if (!(hudRound instanceof HTMLElement)) throw new Error("#hud-round is required");
+if (!(hudShields instanceof HTMLOListElement)) throw new Error("#hud-shields is required");
+if (!(hudBossHp instanceof HTMLOListElement)) throw new Error("#hud-boss-hp is required");
+if (!(hudMemory instanceof HTMLOListElement)) throw new Error("#hud-memory is required");
 
 const renderer = createRenderer(canvas);
 const audio = createAudioManager();
 const heldKeys = new Set();
 const touchPointers = new Map();
+const touchMovementLatch = createTouchMovementLatch();
 const oneShot = { attack: false, dash: false, restart: false };
 let dashIntent = null;
 const BEST_KEY = "mirror-me-ai.best.v1";
@@ -230,26 +246,44 @@ function processEvents(events) {
   if (announcement) statusLive.textContent = announcement;
 }
 
+function fillHudMarks(list, count, label) {
+  [...list.children].forEach((cell, index) => {
+    if (!(cell instanceof HTMLElement)) return;
+    const filled = index < count;
+    cell.dataset.filled = String(filled);
+    cell.setAttribute("aria-label", `${label} ${index + 1}${filled ? " 있음" : " 없음"}`);
+  });
+}
+
+function updateCombatRail() {
+  const rail = combatRailPresentation(state);
+  combatRail.hidden = !rail.visible;
+  if (!rail.visible) return;
+  hudRound.textContent = `R${rail.round}`;
+  hudRound.setAttribute("aria-label", `ROUND ${rail.round}`);
+  fillHudMarks(hudShields, rail.shields, "보호막");
+  fillHudMarks(hudBossHp, rail.coreHp, "보스 코어");
+  [...hudMemory.children].forEach((cell, index) => {
+    if (!(cell instanceof HTMLElement)) return;
+    const side = rail.memory[index];
+    cell.dataset.side = side;
+    cell.setAttribute("aria-label", side === "none" ? `${index + 1}번째 기억 비어 있음` : `${index + 1}번째 ${sideLabel(side)} 회피`);
+  });
+}
+
 function updateOverlay() {
   if (!(startOverlay instanceof HTMLElement)) return;
   const ready = renderer.isReady;
   const error = renderer.status === "error";
   const gameOver = state.phase === PHASE.GAME_OVER;
-  touchControls.hidden = state.phase === PHASE.WAITING;
-  touchControls.dataset.mode = gameOver ? "retry" : "combat";
+  touchControls.hidden = state.phase === PHASE.WAITING || gameOver;
+  touchControls.dataset.mode = "combat";
   touchDpad.hidden = gameOver;
   touchAttack.hidden = gameOver;
   touchActions.setAttribute("aria-label", gameOver ? "재도전" : "전투 행동");
-  touchDash.textContent = gameOver ? "재도전" : "대시";
+  touchDash.textContent = "대시";
   touchDash.setAttribute("aria-keyshortcuts", "Space");
-  if (gameOver) {
-    const retryReady = canRestart(state);
-    touchDash.setAttribute("aria-label", retryReady ? "재도전 (Space)" : "재도전 준비 중");
-    touchDash.setAttribute("aria-disabled", String(!retryReady));
-  } else {
-    touchDash.setAttribute("aria-label", "대시 (Space)");
-    touchDash.removeAttribute("aria-disabled");
-  }
+  touchDash.setAttribute("aria-label", "대시 (Space)");
   startOverlay.hidden = ready && state.phase !== PHASE.WAITING;
   startOverlay.dataset.status = error ? "error" : ready ? "ready" : "loading";
   if (loadingCopy instanceof HTMLElement) {
@@ -276,7 +310,9 @@ function updateOverlay() {
   if (gameOverOverlay instanceof HTMLElement) {
     gameOverOverlay.hidden = state.phase !== PHASE.GAME_OVER;
   }
+  updateCombatRail();
   if (state.phase === PHASE.GAME_OVER) {
+    const retry = retryPresentation(state, CONFIG.restartDelay, canRestart(state));
     if (gameOverTitle instanceof HTMLElement) {
       gameOverTitle.textContent = deathTitleFor(state.death);
     }
@@ -295,6 +331,7 @@ function updateOverlay() {
         ? `예측 ${sideLabel(state.death.predictedSide)} · 실제 ${sideLabel(state.death.actualSide)}`
         : `치명타 · ${state.death?.attackName || "전장 공격"}`;
     }
+    if (deathReading instanceof HTMLElement) deathReading.hidden = !isReadDeath(state);
     if (gameOverTip instanceof HTMLElement) {
       gameOverTip.textContent = displayDeathTip(state.death);
     }
@@ -305,11 +342,14 @@ function updateOverlay() {
       gameOverBest.textContent = `최고 기록 R${best.currentRound || 1} · ${best.score || 0}점 · 속임 ${best.outsmarts || 0}회`;
     }
     if (gameOverRestart instanceof HTMLElement) {
-      const remaining = Math.max(0, CONFIG.restartDelay - state.gameOverElapsed);
-      gameOverRestart.textContent = canRestart(state)
+      gameOverRestart.textContent = !retry.disabled
         ? "ENTER / SPACE · 방금 읽힌 한 가지를 바꿔 다시 도전"
-        : `재도전 준비 ${remaining.toFixed(1)}초`;
+        : retry.label;
     }
+    retryButton.disabled = retry.disabled;
+    retryButton.textContent = retry.label;
+  } else {
+    retryButton.disabled = true;
   }
 }
 
@@ -322,6 +362,7 @@ function startNow() {
   }
   if (!renderer.isReady) return;
   if (state.phase !== PHASE.WAITING) return;
+  clearInput();
   state = startRun(state);
   processEvents(state.events);
   updateOverlay();
@@ -331,6 +372,7 @@ function startNow() {
 function requestRestart() {
   if (!canRestart(state)) return false;
   audio.unlock();
+  clearInput();
   state = restartRun(state);
   processEvents(state.events);
   oneShot.restart = false;
@@ -434,9 +476,13 @@ touchControls.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   audio.unlock();
 
+  if (state.phase === PHASE.WAITING) startNow();
+  if (state.phase === PHASE.GAME_OVER) requestRestart();
+
   releaseTouchPointer(event.pointerId);
   const control = button.dataset.control;
   touchPointers.set(event.pointerId, { control, button });
+  touchMovementLatch.press(control, performance.now() / 1000);
   button.classList.add("is-active");
   try {
     button.setPointerCapture(event.pointerId);
@@ -444,12 +490,7 @@ touchControls.addEventListener("pointerdown", (event) => {
     // Pointer capture is an enhancement; the window-level release is the fallback.
   }
 
-  if (state.phase === PHASE.WAITING) {
-    startNow();
-  }
-  if (state.phase === PHASE.GAME_OVER) {
-    requestRestart();
-  } else if (control === "attack" || control === "dash") {
+  if (state.phase !== PHASE.GAME_OVER && (control === "attack" || control === "dash")) {
     oneShot[control] = true;
     if (control === "dash") dashIntent = readMovement();
   }
@@ -463,6 +504,7 @@ window.addEventListener("pointercancel", (event) => releaseTouchPointer(event.po
 
 function clearInput() {
   heldKeys.clear();
+  touchMovementLatch.reset();
   oneShot.attack = false;
   oneShot.dash = false;
   oneShot.restart = false;
@@ -475,22 +517,23 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) clearInput();
 });
 
-function touchHeld(control) {
-  return [...touchPointers.values()].some((entry) => entry.control === control);
-}
-
 function readMovement() {
-  const left = heldKeys.has("ArrowLeft") || heldKeys.has("KeyA") || touchHeld("left");
-  const right = heldKeys.has("ArrowRight") || heldKeys.has("KeyD") || touchHeld("right");
-  const up = heldKeys.has("ArrowUp") || heldKeys.has("KeyW") || touchHeld("up");
-  const down = heldKeys.has("ArrowDown") || heldKeys.has("KeyS") || touchHeld("down");
+  const touchMovement = touchMovementLatch.movement(
+    performance.now() / 1000,
+    [...touchPointers.values()].map((entry) => entry.control),
+  );
+  const keyboardX = Number(heldKeys.has("ArrowRight") || heldKeys.has("KeyD"))
+    - Number(heldKeys.has("ArrowLeft") || heldKeys.has("KeyA"));
+  const keyboardY = Number(heldKeys.has("ArrowDown") || heldKeys.has("KeyS"))
+    - Number(heldKeys.has("ArrowUp") || heldKeys.has("KeyW"));
   return {
-    moveX: Number(right) - Number(left),
-    moveY: Number(down) - Number(up),
+    moveX: keyboardX + touchMovement.moveX,
+    moveY: keyboardY + touchMovement.moveY,
   };
 }
 
 startButton.addEventListener("click", startNow);
+retryButton.addEventListener("click", requestRestart);
 
 canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 && event.pointerType === "mouse") return;

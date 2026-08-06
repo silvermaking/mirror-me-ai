@@ -346,13 +346,13 @@ button { color: inherit; font: inherit; }
   min-width: 44px;
   min-height: 44px;
   padding: .35rem;
-  border: 1px solid rgba(238, 230, 207, .48);
+  border: 1px solid rgba(238, 230, 207, .32);
   color: var(--ivory);
-  background: rgba(17, 24, 36, .74);
+  background: rgba(17, 24, 36, .44);
   pointer-events: auto;
   font-size: .86rem;
 }
-.touch-button.is-active { border-color: #f6dfc7; background: rgba(169, 50, 42, .9); transform: scale(.96); }
+.touch-button.is-active { border-color: #f6dfc7; background: rgba(169, 50, 42, .68); transform: scale(.96); }
 .touch-up { grid-area: 1 / 2; }
 .touch-left { grid-area: 2 / 1; }
 .touch-down { grid-area: 2 / 2; }
@@ -542,4 +542,125 @@ button:focus-visible { outline: 3px solid var(--ivory); outline-offset: 3px; }
   .next-attempt { margin-top: 4px; padding-top: 3px; }
   .next-attempt strong { font-size: 11px; line-height: 1.2; }
   .death-restart { display: none; }
+}
+
+/* HUD PASS: the live game uses only a thin, object-free rail—never a card. */
+.combat-rail {
+  position: absolute;
+  z-index: 7;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: 100%;
+  height: 40px;
+  padding: 7px 13px;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  color: #eee7d9;
+  font: 800 12px/1 ui-sans-serif, system-ui, sans-serif;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
+}
+/* Audio is a combat control: it stays low in combat and has no hit target during overlays. */
+.mute-button { top: auto; right: 10px; bottom: 10px; }
+#start-overlay:not([hidden]) ~ .mute-button,
+#game-over-overlay:not([hidden]) ~ .mute-button { visibility: hidden; pointer-events: none; }
+.hud-round { min-width: 22px; color: #eee7d9; letter-spacing: .08em; }
+.hud-marks,
+.hud-memory { display: inline-flex; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.hud-marks li,
+.hud-memory li { position: relative; display: block; width: 11px; height: 11px; }
+.hud-shields li {
+  border: 1px solid rgba(112, 155, 224, .45);
+  background: rgba(40, 70, 123, .18);
+  clip-path: polygon(50% 0, 100% 36%, 76% 100%, 20% 88%, 0 36%);
+}
+.hud-shields li[data-filled="true"] { border-color: #709be0; background: #315ca9; box-shadow: 0 1px 3px rgba(18, 42, 91, .75); }
+.hud-boss-hp { margin-left: auto; }
+.hud-boss-hp li {
+  border: 1px solid rgba(238, 230, 207, .34);
+  background: rgba(238, 230, 207, .08);
+  clip-path: polygon(12% 0, 88% 8%, 100% 55%, 70% 100%, 13% 84%, 0 28%);
+}
+.hud-boss-hp li::after { position: absolute; top: 1px; bottom: 1px; left: 5px; width: 1px; background: rgba(55, 42, 30, .78); content: ""; transform: rotate(27deg); }
+.hud-boss-hp li[data-filled="true"] { border-color: #dfd0b2; background: #b9ab91; box-shadow: 0 1px 3px rgba(0, 0, 0, .68); }
+.hud-memory { margin-left: 5px; }
+.hud-memory li {
+  width: 14px;
+  height: 12px;
+  border: 1px solid rgba(196, 156, 80, .28);
+  background: rgba(17, 13, 10, .22);
+  clip-path: polygon(0 20%, 69% 0, 100% 34%, 82% 100%, 12% 86%);
+}
+.hud-memory li[data-side="left"],
+.hud-memory li[data-side="right"] { border-color: #c49c50; background: #8d6b36; box-shadow: 0 1px 3px rgba(0, 0, 0, .74); }
+.hud-memory li[data-side="left"]::after,
+.hud-memory li[data-side="right"]::after { position: absolute; inset: -2px 0 0; color: #171313; font: 900 12px/1 ui-sans-serif, system-ui, sans-serif; text-align: center; content: "←"; }
+.hud-memory li[data-side="right"]::after { content: "→"; }
+
+/* Start is a bottom action strip, not a rules card. */
+.start-overlay { align-content: end; padding: 0; background: linear-gradient(0deg, rgba(8, 6, 5, .72), transparent 100%); }
+.start-copy { display: flex; width: 100%; padding: 0 12px 10px; align-items: center; gap: 12px; }
+.game-hook { flex: 1; max-width: none; margin: 0; color: #eee7d9; font: 750 13px/1.2 ui-sans-serif, system-ui, sans-serif; text-shadow: 0 1px 3px rgba(0, 0, 0, .95); }
+.start-button { min-width: 132px; min-height: 44px; padding: 6px 12px; border-left-width: 3px; text-align: center; }
+.start-button span { font-size: 12px; }
+.loading-copy { position: absolute; right: 12px; bottom: 56px; }
+
+/* Death keeps its failed arena frame and data, without a dashboard card. */
+.game-over-overlay { pointer-events: none; background: linear-gradient(0deg, rgba(8, 6, 5, .62), transparent 64%); }
+.death-analysis { width: min(31rem, 66%); padding: 0 0 8px; color: #eee7d9; background: none; border: 0; text-align: left; text-shadow: 0 1px 3px rgba(0, 0, 0, .96); }
+.death-analysis h2 { font-size: clamp(1rem, 1.8vw, 1.45rem); }
+.death-reading { margin-top: 4px; }
+.death-reading > p:first-child { display: none; }
+.next-attempt { margin-top: 5px; padding: 4px 0 0; border-top: 1px solid rgba(196, 156, 80, .34); }
+.next-attempt strong { color: #b9ece1; }
+.death-run { margin-top: 5px; }
+.death-best { margin-top: 2px; }
+.death-restart { margin: 5px 0 0; color: #b9ece1; }
+.retry-button {
+  min-width: 132px;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(196, 156, 80, .68);
+  border-left: 3px solid #c55c32;
+  color: #eee7d9;
+  background: rgba(32, 23, 18, .9);
+  cursor: pointer;
+  pointer-events: auto;
+  font: 800 12px/1 ui-sans-serif, system-ui, sans-serif;
+}
+.retry-button:disabled { border-color: rgba(196, 156, 80, .24); border-left-color: rgba(197, 92, 50, .3); color: rgba(238, 231, 217, .46); background: rgba(19, 14, 11, .42); cursor: wait; }
+.retry-button:not(:disabled):hover,
+.retry-button:not(:disabled):focus-visible { background: rgba(75, 45, 28, .96); }
+
+@media (max-width: 420px), (max-height: 260px) {
+  .combat-rail { height: 18px; padding: 3px 5px; gap: 5px; font-size: 10px; }
+  .hud-round { min-width: 17px; }
+  .hud-marks, .hud-memory { gap: 3px; }
+  .hud-marks li { width: 10px; height: 10px; }
+  .hud-memory { margin-left: 2px; }
+  .hud-memory li { width: 11px; height: 10px; }
+  .hud-memory li[data-side="left"]::after, .hud-memory li[data-side="right"]::after { top: -2px; font-size: 10px; }
+  .start-overlay { top: auto; height: 44px; background: rgba(8, 6, 5, .78); }
+  .start-copy { height: 44px; padding: 0 4px; gap: 5px; }
+  .game-hook { overflow: hidden; font-size: 10px; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+  .start-button { min-width: 104px; min-height: 44px; padding: 5px 8px; }
+  .start-button span { font-size: 11px; }
+  .loading-copy { right: 4px; bottom: 46px; font-size: 8px; }
+  .game-over-overlay { padding: 4px; }
+  .death-analysis { width: calc(100% - 54px); padding: 0 0 3px; }
+  .death-kicker { display: none; }
+  .death-analysis h2 { margin: 0; font-size: 10px; line-height: 10px; white-space: nowrap; }
+  .death-reading { margin: 1px 0 0; gap: 3px; line-height: 9px; }
+  .death-reading:not([hidden]) { display: flex; }
+  .memory-sequence { gap: 2px; }
+  .memory-sequence li { width: 13px; height: 9px; font-size: 8px; }
+  .death-comparison, .next-attempt strong, .death-run, .death-best, .death-restart { font-size: 8px; line-height: 9px; }
+  .death-comparison { margin: 0; }
+  .next-attempt { margin: 1px 0 0; padding: 1px 0 0; }
+  .next-attempt strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .death-run, .death-best { display: inline; margin: 1px 4px 0 0; white-space: nowrap; }
+  .retry-button { position: absolute; right: -50px; bottom: 0; min-width: 46px; min-height: 44px; margin: 0; padding: 4px; font-size: 9px; }
+  .death-reading[hidden] { display: none; }
 }

@@ -2,112 +2,112 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
-import { PHASE } from "../src/game-core.mjs";
-import { playerFrameFor } from "../src/render-2d.mjs";
+
+import { CONFIG, PHASE, canRestart, createGameState } from "../src/game-core.mjs";
+import { combatRailPresentation, isReadDeath, retryPresentation } from "../src/ui-model.mjs";
 
 const ROOT = resolve(import.meta.dirname, "..");
 
-test("release entrypoints share one fixed challenger cache revision", async () => {
-  const html = await readFile(resolve(ROOT, "index.html"), "utf8");
-  const stylesheetRevision = html.match(/href="\.\/styles\.css\?v=([^"]+)"/)?.[1];
-  const moduleRevision = html.match(/src="\.\/src\/main\.js\?v=([^"]+)"/)?.[1];
-
-  assert.equal(stylesheetRevision, "classic-asset-2");
-  assert.equal(moduleRevision, stylesheetRevision, "CSS and module entrypoint cannot mix releases");
-});
-
-test("start and retry surfaces preserve the complete player-facing information set", async () => {
-  const [html, main, renderer] = await Promise.all([
+async function runtimeSources() {
+  const [html, main, sprite, classic, oldRenderer, css] = await Promise.all([
     readFile(resolve(ROOT, "index.html"), "utf8"),
     readFile(resolve(ROOT, "src/main.js"), "utf8"),
+    readFile(resolve(ROOT, "src/render-sprite.mjs"), "utf8"),
+    readFile(resolve(ROOT, "src/render-classic.mjs"), "utf8"),
     readFile(resolve(ROOT, "src/render-2d.mjs"), "utf8"),
-  ]);
-
-  for (const copy of [
-    "첫 세 번의 회피가 보스의 다음 공격이 된다",
-    "WASD",
-    "SPACE",
-    "무적 아님",
-    "열린 코어 직접 공격",
-  ]) {
-    assert.match(html, new RegExp(copy), `opening communicates ${copy}`);
-  }
-
-  for (const id of [
-    "game-over-title",
-    "game-over-memory",
-    "game-over-comparison",
-    "game-over-tip",
-    "game-over-run",
-    "game-over-best",
-    "game-over-restart",
-  ]) {
-    assert.match(html, new RegExp(`id="${id}"`), `${id} is rendered, not discarded in hidden state`);
-    assert.match(main, new RegExp(id.replaceAll("-", ""), "i"), `${id} is populated from the finished run`);
-  }
-  assert.match(
-    main,
-    /주홍선이 고정된 뒤, 옆으로 한 번 이동/,
-    "explore deaths teach the fixed-lane timing without mutating core death data",
-  );
-
-  for (const copy of ["CARTOGRAPHER · WARD", "THE UNMAPPED KING · CORE SEALED", "OUTSMART", "CORE −1", "ROUND"] ) {
-    assert.ok(renderer.includes(copy), `runtime feedback keeps ${copy}`);
-  }
-});
-
-test("320×180 keeps the full combat canvas instead of reserving a control strip", async () => {
-  const css = await readFile(resolve(ROOT, "styles.css"), "utf8");
-  assert.match(css, /\.game-stage\s*\{\s*width:\s*min\(100vw,\s*calc\(100dvh \* 16 \/ 9\)\)/s);
-  assert.doesNotMatch(css, /100dvh\s*-\s*2\.7rem/, "mobile controls must overlay rather than shrink the stage");
-});
-
-test("game-over presentation keeps the latest completed three-sample pattern", async () => {
-  const main = await readFile(resolve(ROOT, "src/main.js"), "utf8");
-
-  assert.match(main, /let lastCompletedMemory = \[\]/);
-  assert.match(main, /event\.type === "remember"[\s\S]*?completedMemoryPattern\(event\.memory\)/);
-  assert.match(main, /event\.type === "start" \|\| event\.type === "restart"[\s\S]*?lastCompletedMemory = \[\]/);
-  assert.match(
-    main,
-    /const remembered = memoryForGameOver\(state\.death\)/,
-    "game over reads presentation evidence instead of only the core's current memory",
-  );
-});
-
-test("short touch layout keeps 44px combat targets and exposes one retry action", async () => {
-  const [html, main, css] = await Promise.all([
-    readFile(resolve(ROOT, "index.html"), "utf8"),
-    readFile(resolve(ROOT, "src/main.js"), "utf8"),
     readFile(resolve(ROOT, "styles.css"), "utf8"),
   ]);
+  return { html, main, sprite, classic, oldRenderer, css };
+}
 
-  assert.match(html, /aria-label="대시 \(Space\)"/);
-  assert.match(html, /aria-keyshortcuts="Space"/);
-  assert.match(css, /\.touch-button\s*\{[\s\S]*?min-width:\s*44px;[\s\S]*?min-height:\s*44px;/);
-  assert.match(css, /\.touch-dpad\s*\{\s*grid-template:\s*44px\s*\/\s*repeat\(4,\s*44px\)/);
-  assert.match(css, /\.touch-controls\[data-mode="retry"\][\s\S]*?min-width:\s*60px;/);
-  assert.match(main, /touchDpad\.hidden = gameOver/);
-  assert.match(main, /touchAttack\.hidden = gameOver/);
-  assert.match(main, /touchDash\.textContent = gameOver \? "재도전" : "대시"/);
+test("the shipped main → sprite → classic import path owns the HUD, not the archived renderer", async () => {
+  const { html, main, sprite, classic, oldRenderer } = await runtimeSources();
+  assert.match(main, /from "\.\/render-sprite\.mjs"/);
+  assert.match(sprite, /from "\.\/render-classic\.mjs"/);
+  assert.doesNotMatch(main, /render-2d\.mjs/);
+  assert.match(main, /from "\.\/ui-model\.mjs"/);
+  assert.match(classic, /consumeClassicTutorialCueEvents/);
+  assert.match(html, /id="combat-rail"/);
+  assert.doesNotMatch(oldRenderer, /id="combat-rail"/, "unused render-2d text cannot certify the shipped HUD");
 });
 
-test("320×180 opening and death analysis retain only readable priority copy", async () => {
-  const css = await readFile(resolve(ROOT, "styles.css"), "utf8");
-
-  assert.match(css, /\.start-rule\s*\{\s*display:\s*none;\s*\}/);
-  assert.match(css, /\.start-button\s*\{[^}]*min-height:\s*44px;/);
-  assert.match(css, /\.death-analysis\s*\{[^}]*width:\s*calc\(100% - 72px\)/);
-  assert.match(css, /\.next-attempt strong\s*\{[^}]*font-size:\s*11px;/);
-  assert.match(css, /\.death-restart\s*\{\s*display:\s*none;\s*\}/);
+test("combat rail uses real state, hides outside combat, and carries all physical marks", () => {
+  const waiting = createGameState();
+  assert.equal(combatRailPresentation(waiting).visible, false);
+  const active = createGameState({ started: true });
+  active.round = 3; active.player.shield = 2; active.boss.coreHp = 4; active.memory = ["left", "right"];
+  assert.deepEqual(combatRailPresentation(active), { visible: true, round: 3, shields: 2, coreHp: 4, memory: ["left", "right", "none"] });
+  active.phase = PHASE.GAME_OVER;
+  assert.equal(combatRailPresentation(active).visible, false);
 });
 
-test("renderer-observed movement can return the player to idle without changing core lastMove", () => {
-  const state = {
-    phase: PHASE.EXPLORE,
-    player: { lastMove: { x: 1, y: 0 } },
-    visual: { attack: null, lastDash: null },
-  };
-  assert.equal(playerFrameFor(state, true).id, "player-move");
-  assert.equal(playerFrameFor(state, false).id, "player-idle");
+test("the actual retry truth uses game-core canRestart for disabled text and READ-only evidence", () => {
+  const state = createGameState({ started: true });
+  state.phase = PHASE.GAME_OVER; state.gameOverElapsed = CONFIG.restartDelay - .1;
+  let retry = retryPresentation(state, CONFIG.restartDelay, canRestart(state));
+  assert.equal(retry.disabled, true); assert.match(retry.label, /0\.1초/);
+  state.gameOverElapsed = CONFIG.restartDelay;
+  retry = retryPresentation(state, CONFIG.restartDelay, canRestart(state));
+  assert.equal(retry.disabled, false); assert.equal(retry.label, "재도전");
+  state.death = { kind: "read" }; assert.equal(isReadDeath(state), true);
+  state.death = { kind: "attack" }; assert.equal(isReadDeath(state), false);
+});
+
+test("DOM keeps one visual retry source, a valid start name, and mobile-sized interactive controls", async () => {
+  const { html, css } = await runtimeSources();
+  assert.match(html, /id="start-overlay"[\s\S]*?aria-label="Mirror Me 전투 시작"/);
+  assert.doesNotMatch(html, /aria-labelledby="game-title"/);
+  assert.match(html, /id="retry-button"[^>]*disabled/);
+  assert.match(html, /id="game-over-restart" class="death-restart visually-hidden"/);
+  assert.match(css, /\.combat-rail\s*\{[\s\S]*?height:\s*40px;/);
+  assert.match(css, /\.retry-button\s*\{[\s\S]*?min-height:\s*44px;/);
+  assert.match(css, /\.start-overlay\s*\{\s*top:\s*auto;\s*height:\s*44px;/);
+  assert.match(css, /\.death-reading:not\(\[hidden\]\)\s*\{\s*display:\s*flex;/, "READ evidence must recover from the older mobile hide rule");
+  assert.match(css, /\.death-reading\[hidden\]\s*\{\s*display:\s*none;/, "non-READ deaths must stay actually hidden");
+  assert.match(css, /#start-overlay:not\(\[hidden\]\) ~ \.mute-button,[\s\S]*?#game-over-overlay:not\(\[hidden\]\) ~ \.mute-button\s*\{\s*visibility:\s*hidden;\s*pointer-events:\s*none;/, "opening and retry must remove mute's hit target");
+  assert.match(css, /\.mute-button\s*\{\s*top:\s*auto;\s*right:\s*10px;\s*bottom:\s*10px;/, "combat mute must stay below the rail");
+  assert.doesNotMatch(css, /\.combat-rail\s*\{[^}]*background:/s, "rail cannot become a long panel or pill");
+});
+
+test("classic stage invokes the arena exactly once per render", async () => {
+  const { classic } = await runtimeSources();
+  const renderGame = classic.slice(classic.indexOf("export function renderGame"), classic.indexOf("export function createRenderer"));
+  assert.equal((renderGame.match(/drawArena\(ctx, now\)/g) ?? []).length, 1);
+  assert.match(renderGame, /onArenaDraw\?\.\(\)/);
+});
+
+test("rail visual primitives stay separate from a card background", async () => {
+  const { html, css } = await runtimeSources();
+  assert.match(html, /id="hud-shields"[\s\S]*?<li[^>]*><\/li><li[^>]*><\/li><li[^>]*><\/li>/);
+  assert.match(html, /id="hud-boss-hp"[\s\S]*?<li><\/li><li><\/li><li><\/li><li><\/li><li><\/li><li><\/li>/);
+  assert.match(css, /\.hud-shields li\s*\{[\s\S]*?clip-path:/);
+  assert.match(css, /\.hud-boss-hp li\s*\{[\s\S]*?clip-path:/);
+  assert.match(css, /\.hud-memory li\[data-side="left"\]::after[\s\S]*?content:\s*"←"/);
+  assert.match(css, /\.hud-memory li\[data-side="right"\]::after[\s\S]*?content:\s*"→"/);
+});
+
+test("retired persistent tutorial sentences are absent from the active Canvas renderer", async () => {
+  const { classic } = await runtimeSources();
+  for (const retired of ["추적 중", "LOCK · 반대로", "접근 · J", "2타 · 이탈 준비", "3타 · 즉시 이탈"]) {
+    assert.doesNotMatch(classic, new RegExp(retired.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
+test("the real retry button owns clicks while game-over touch controls are removed", async () => {
+  const { main } = await runtimeSources();
+  assert.match(main, /retryButton\.addEventListener\("click", requestRestart\)/);
+  assert.match(main, /retryButton\.disabled = retry\.disabled/);
+  assert.match(main, /touchControls\.hidden = state\.phase === PHASE\.WAITING \|\| gameOver/);
+  assert.match(main, /if \(state\.phase === PHASE\.GAME_OVER && \(event\.code === "Enter" \|\| event\.code === "Space"\)\)/);
+});
+
+test("touch taps use the isolated latch while desktop keyboard remains hold-only", async () => {
+  const { main } = await runtimeSources();
+  assert.match(main, /from "\.\/touch-movement-latch\.mjs"/);
+  assert.match(main, /touchMovementLatch\.press\(control, performance\.now\(\) \/ 1000\)/);
+  assert.match(main, /touchMovementLatch\.movement\(/);
+  assert.match(main, /function clearInput\(\)[\s\S]*?touchMovementLatch\.reset\(\)/);
+  assert.match(main, /function startNow\(\)[\s\S]*?clearInput\(\)/);
+  assert.match(main, /function requestRestart\(\)[\s\S]*?clearInput\(\)/);
+  assert.doesNotMatch(main, /heldKeys\.set|keyboardLatch|stickyKey/);
 });

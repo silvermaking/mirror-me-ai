@@ -126,6 +126,13 @@ export function rigDrawPlan(state, manifest, now = 0) {
   });
 }
 
+// The gate cable is stage geometry, but its source must remain the active
+// authored body frame's driver anchor rather than a classic-body estimate.
+export function rigBossDriverJoint(state, manifest, now = 0) {
+  const boss = rigDrawPlan(state, manifest, now).boss;
+  return Object.freeze(projectSpriteAnchor(boss.transform, boss.frame, "driver_joint"));
+}
+
 export function rigAnchorMetrics(state, manifest, now = 0) {
   const plan = rigDrawPlan(state, manifest, now);
   const errors = { feet: distance(projectSpriteAnchor(plan.player.transform, plan.player.frame, "feet"), projectWorld(state.player)), blade: null, driver: null, cuffPivot: null, cuffAxis: null };
@@ -184,6 +191,9 @@ export function createSpriteCharacterLayer(manifest, images) {
   if (!validateRigSpriteSet(manifest).pass) throw new Error("Invalid rig sprite manifest");
   if (Object.keys(manifest.sheets).some((name) => !images[name])) throw new Error("Sprite strip image missing");
   return Object.freeze({
+    getBossDriverJoint(state, { now }) {
+      return rigBossDriverJoint(state, manifest, now);
+    },
     drawBoss(ctx, state, { now }) {
       const boss = rigDrawPlan(state, manifest, now).boss;
       // Shaft/tip are behind the socket body: no duplicate cuff/barrel exists.

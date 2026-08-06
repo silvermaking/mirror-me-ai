@@ -570,31 +570,85 @@ export function classicExploreCuePlan(state, clientWidth = LOGICAL_WIDTH) {
   });
 }
 
-export function classicTrackingTracePlan(state) {
+// The first three samples begin as a physical gate, not an explanatory line:
+// its centre tracks the player's real floor x until the core freezes that x
+// into `explore.lineX`.  Keeping the world half-width in the plan makes the
+// renderer and the eventual game-core lane visibly share one measurement.
+export function classicTrackingGatePlan(state) {
   const firstRunSampling = state.round === 1
     && Array.isArray(state.memory)
     && state.memory.length < 3
     && !state.lock;
   if (firstRunSampling && (state.phase === PHASE.ENGAGE || state.phase === PHASE.EXPLORE_RECOVER)) {
+    const targetWorld = { x: state.player?.x ?? CONFIG.playerStartX, y: 0 };
     return Object.freeze({
       active: true,
+      moving: true,
       fixed: false,
       sampleNumber: state.memory.length + 1,
-      target: Object.freeze(projectWorld(state.player || {
-        x: CONFIG.playerStartX,
-        y: CONFIG.playerStartY,
-      })),
+      targetWorld: Object.freeze(targetWorld),
+      target: Object.freeze(projectWorld(targetWorld)),
+      halfWorld: CONFIG.exploreLaneHalfWidth,
+      half: CONFIG.exploreLaneHalfWidth * VIEW.scaleX,
     });
   }
   if (firstRunSampling && state.phase === PHASE.EXPLORE && Number.isFinite(state.explore?.lineX)) {
+    const targetWorld = { x: state.explore.lineX, y: 0 };
     return Object.freeze({
       active: true,
+      moving: false,
       fixed: true,
       sampleNumber: state.memory.length + 1,
-      target: Object.freeze(projectWorld({ x: state.explore.lineX, y: 0 })),
+      targetWorld: Object.freeze(targetWorld),
+      target: Object.freeze(projectWorld(targetWorld)),
+      halfWorld: CONFIG.exploreLaneHalfWidth,
+      half: CONFIG.exploreLaneHalfWidth * VIEW.scaleX,
     });
   }
-  return Object.freeze({ active: false, fixed: false, sampleNumber: 0, target: null });
+  return Object.freeze({
+    active: false,
+    moving: false,
+    fixed: false,
+    sampleNumber: 0,
+    targetWorld: null,
+    target: null,
+    halfWorld: CONFIG.exploreLaneHalfWidth,
+    half: CONFIG.exploreLaneHalfWidth * VIEW.scaleX,
+  });
+}
+
+// Kept as the compatibility name for the motion plan.  The old dashed line
+// renderer is intentionally gone; consumers now receive the same gate truth.
+export function classicTrackingTracePlan(state) {
+  return classicTrackingGatePlan(state);
+}
+
+function validScreenPoint(point) {
+  return Boolean(point && Number.isFinite(point.x) && Number.isFinite(point.y));
+}
+
+// Character layers may provide an authored sprite anchor.  The classic
+// fallback owns the same relationship through its shoulder/driver root, but
+// the accepted rig projection is the authority whenever it is available.
+export function classicTrackingGateConnectionPlan(state, driverJoint = null, now = 0) {
+  const gate = classicTrackingGatePlan(state);
+  if (!gate.active || !gate.target) {
+    return Object.freeze({ active: false, gate, joint: null, header: null, left: null, right: null });
+  }
+  const fallbackJoint = classicBossMotionPlan(state, now).shoulder;
+  const joint = validScreenPoint(driverJoint) ? driverJoint : fallbackJoint;
+  const top = VIEW.centerY - 210;
+  const header = Object.freeze({ x: gate.target.x, y: top + 42 });
+  const left = Object.freeze({ x: gate.target.x - gate.half, y: header.y });
+  const right = Object.freeze({ x: gate.target.x + gate.half, y: header.y });
+  return Object.freeze({
+    active: true,
+    gate,
+    joint: Object.freeze({ x: joint.x, y: joint.y }),
+    header,
+    left,
+    right,
+  });
 }
 
 export function classicBossMotionPlan(state, now = 0) {
@@ -602,7 +656,7 @@ export function classicBossMotionPlan(state, now = 0) {
   const base = projectWorld(boss);
   const hasLock = Boolean(state.lock?.zone);
   const player = state.player || { x: CONFIG.playerStartX, y: CONFIG.playerStartY };
-  const trackingTrace = classicTrackingTracePlan(state);
+  const trackingTrace = classicTrackingGatePlan(state);
   const trackingPlayer = state.phase === PHASE.ENGAGE
     || (trackingTrace.active && !trackingTrace.fixed);
   const fixedExploreLane = state.phase === PHASE.EXPLORE && Number.isFinite(state.explore?.lineX);
@@ -1163,14 +1217,19 @@ function drawArena(ctx, now) {
   ctx.restore();
 }
 
-function drawExploreWarning(ctx, state) {
+function drawExploreWarning(ctx, state, tutorialCue = null, now = 0) {
   if (state.phase !== PHASE.EXPLORE || !state.explore) return;
   const center = projectWorld({ x: state.explore.lineX, y: 0 });
   const half = CONFIG.exploreLaneHalfWidth * VIEW.scaleX;
+  const gate = classicTrackingGatePlan(state);
   const urgency = 1 - clamp(state.phaseTime / 0.55, 0, 1);
   const top = VIEW.centerY - 210;
   const bottom = VIEW.centerY + 208;
   const scorch = { x: center.x, y: VIEW.centerY };
+  const cueAge = tutorialCue?.kind === "wasd" && Number.isFinite(tutorialCue.startedAt)
+    ? now - tutorialCue.startedAt
+    : Infinity;
+  const cueOnset = clamp(1 - cueAge / .12, 0, 1);
 
   ctx.save();
   ctx.fillStyle = "rgba(14,10,8,.82)";
@@ -1185,19 +1244,23 @@ function drawExploreWarning(ctx, state) {
     ellipse(ctx, { x: scorch.x + half * offset, y: scorch.y }, 4, 2.5);
     ctx.fill();
   }
-  ctx.globalAlpha = 0.72 + urgency * 0.28;
-  ctx.fillStyle = "rgba(124,46,29,.16)";
+  ctx.globalAlpha = 0.72 + urgency * 0.28 + cueOnset * .12;
+  ctx.fillStyle = `rgba(124,46,29,${.16 + cueOnset * .1})`;
   ctx.fillRect(center.x - half, top, half * 2, bottom - top);
-  ctx.strokeStyle = COLORS.rustBright;
-  ctx.lineWidth = 3 + urgency * 2;
-  lines(ctx, [
-    [{ x: center.x - half, y: top }, { x: center.x - half, y: bottom }],
-    [{ x: center.x + half, y: top }, { x: center.x + half, y: bottom }],
-  ]);
-  ctx.stroke();
+  // First-round sampling keeps the same gate walls from ENGAGE.  Later
+  // rounds retain the original lane outline without inventing a second gate.
+  if (!gate.active) {
+    ctx.strokeStyle = COLORS.rustBright;
+    ctx.lineWidth = 3 + urgency * 2 + cueOnset * 2;
+    lines(ctx, [
+      [{ x: center.x - half, y: top }, { x: center.x - half, y: bottom }],
+      [{ x: center.x + half, y: top }, { x: center.x + half, y: bottom }],
+    ]);
+    ctx.stroke();
+  }
   ctx.strokeStyle = COLORS.porcelainLight;
   ctx.lineWidth = 4;
-  const gap = clamp(state.phaseTime / 0.55, 0, 1) * 185;
+  const gap = clamp(state.phaseTime / 0.55, 0, 1) * 185 * (1 - cueOnset * .24);
   lines(ctx, [
     [{ x: center.x - half - 8, y: VIEW.centerY - gap }, { x: center.x + half + 8, y: VIEW.centerY - gap }],
     [{ x: center.x - half - 8, y: VIEW.centerY + gap }, { x: center.x + half + 8, y: VIEW.centerY + gap }],
@@ -1222,36 +1285,81 @@ function drawExploreWarning(ctx, state) {
   ctx.restore();
 }
 
-function drawTrackingTrace(ctx, state, now) {
-  const trace = classicTrackingTracePlan(state);
-  if (!trace.active || !trace.target) return;
-  const base = projectWorld(state.boss || { x: CONFIG.bossX, y: CONFIG.bossY });
-  const direction = trace.target.x >= base.x ? 1 : -1;
-  const sight = { x: base.x + direction * 23, y: base.y - 145 };
-  const pulse = trace.fixed ? 0.9 : 0.46 + Math.sin(now * 14) * 0.1;
+function drawTrackingGate(ctx, state, now, driverJoint = null) {
+  const connection = classicTrackingGateConnectionPlan(state, driverJoint, now);
+  if (!connection.active) return;
+  const { gate, joint, header, left: headerLeft, right: headerRight } = connection;
+  const top = VIEW.centerY - 210;
+  const bottom = VIEW.centerY + 208;
+  const progress = gate.fixed
+    ? phaseProgress(state.phaseTime, timingForRound(state.round || 1).explore)
+    : 0;
+  const snap = gate.fixed ? clamp(1 - progress / .12, 0, 1) : 0;
+  const pulse = gate.fixed ? 0.94 : 0.78 + Math.sin(now * 14) * 0.08;
+  const left = { x: gate.target.x - gate.half, y: VIEW.centerY };
+  const right = { x: gate.target.x + gate.half, y: VIEW.centerY };
   ctx.save();
   ctx.globalAlpha = pulse;
+  // One uninterrupted mechanical link begins at the real driver joint.  It
+  // is drawn before the body, so paint masks the source cleanly but the link
+  // remains readable from the joint's housing to the gate header.
   ctx.strokeStyle = "rgba(8,7,6,.92)";
-  ctx.lineWidth = trace.fixed ? 8 : 5;
-  if (!trace.fixed) ctx.setLineDash([9, 12]);
-  line(ctx, sight, trace.target);
+  ctx.lineWidth = 16;
+  line(ctx, joint, header);
   ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.strokeStyle = trace.fixed ? COLORS.rustBright : "rgba(197,92,50,.82)";
-  ctx.lineWidth = trace.fixed ? 3.5 : 2;
-  line(ctx, sight, trace.target);
+  ctx.strokeStyle = gate.fixed ? COLORS.brassLight : "rgba(222,111,56,.98)";
+  ctx.lineWidth = gate.fixed ? 6 + snap * 3 : 7;
+  line(ctx, joint, header);
   ctx.stroke();
-  const clampWidth = trace.fixed ? 27 : 22;
-  ctx.strokeStyle = trace.fixed ? COLORS.porcelainLight : COLORS.heat;
-  ctx.lineWidth = trace.fixed ? 5 : 2;
+
+  // These are deliberately hollow: the player can see the floor and move
+  // through the gate, while the exact collision half-width stays legible.
+  ctx.strokeStyle = "rgba(8,7,6,.94)";
+  ctx.lineWidth = 18 + snap * 4;
   lines(ctx, [
-    [{ x: trace.target.x - clampWidth, y: trace.target.y - 12 }, { x: trace.target.x - clampWidth, y: trace.target.y + 12 }],
-    [{ x: trace.target.x + clampWidth, y: trace.target.y - 12 }, { x: trace.target.x + clampWidth, y: trace.target.y + 12 }],
+    [{ x: left.x, y: top }, { x: left.x, y: bottom }],
+    [{ x: right.x, y: top }, { x: right.x, y: bottom }],
   ]);
   ctx.stroke();
-  ctx.fillStyle = trace.fixed ? COLORS.rustBright : COLORS.heat;
-  ellipse(ctx, sight, trace.fixed ? 9 : 15, trace.fixed ? 4 : 7);
-  ctx.fill();
+  ctx.strokeStyle = gate.fixed ? COLORS.rustBright : "rgba(222,111,56,.96)";
+  ctx.lineWidth = 8 + snap * 2;
+  lines(ctx, [
+    [{ x: left.x, y: top }, { x: left.x, y: bottom }],
+    [{ x: right.x, y: top }, { x: right.x, y: bottom }],
+  ]);
+  ctx.stroke();
+  // The header is the cable's physical terminus and joins both walls.  It is
+  // deliberately short, high and hollow below so it reads as arena hardware,
+  // not a HUD divider.
+  ctx.strokeStyle = "rgba(8,7,6,.94)";
+  ctx.lineWidth = 18 + snap * 4;
+  line(ctx, headerLeft, headerRight);
+  ctx.stroke();
+  ctx.strokeStyle = gate.fixed ? COLORS.brassLight : "rgba(222,111,56,.98)";
+  ctx.lineWidth = 8 + snap * 2;
+  line(ctx, headerLeft, headerRight);
+  ctx.stroke();
+  // Short cross-grips make both hollow walls separately readable at 320 even
+  // when the tracked player briefly overlaps the centre of this narrow lane.
+  ctx.strokeStyle = gate.fixed ? COLORS.heat : "rgba(243,187,98,.92)";
+  ctx.lineWidth = 4;
+  lines(ctx, [
+    [{ x: left.x - 13, y: top + 24 }, { x: left.x + 13, y: top + 24 }],
+    [{ x: left.x - 13, y: bottom - 24 }, { x: left.x + 13, y: bottom - 24 }],
+    [{ x: right.x - 13, y: top + 24 }, { x: right.x + 13, y: top + 24 }],
+    [{ x: right.x - 13, y: bottom - 24 }, { x: right.x + 13, y: bottom - 24 }],
+  ]);
+  ctx.stroke();
+  if (snap > 0) {
+    ctx.globalAlpha = snap;
+    ctx.strokeStyle = COLORS.porcelainLight;
+    ctx.lineWidth = 3.5;
+    lines(ctx, [
+      [{ x: left.x - 14, y: top + 18 }, { x: left.x + 14, y: top + 18 }],
+      [{ x: right.x - 14, y: bottom - 18 }, { x: right.x + 14, y: bottom - 18 }],
+    ]);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -1344,9 +1452,46 @@ export function classicMemoryGroundTracePlan(traces = []) {
   })));
 }
 
+export function classicMemoryEscapeChevronPlan(state) {
+  const marker = state?.visual?.escapeMarker;
+  if (!marker || (marker.side !== "left" && marker.side !== "right")) {
+    return Object.freeze({ active: false, endpoint: null, direction: 0 });
+  }
+  const duration = Number.isFinite(marker.duration) ? marker.duration : .72;
+  const remaining = Number.isFinite(marker.remaining) ? marker.remaining : duration;
+  const age = Math.max(0, duration - remaining);
+  return Object.freeze({
+    active: age <= CLASSIC_MEMORY_FLIGHT_SECONDS,
+    endpoint: Object.freeze(projectWorld(marker)),
+    direction: marker.side === "left" ? -1 : 1,
+  });
+}
+
+function drawMemoryEscapeChevron(ctx, cue) {
+  if (!cue.active || !cue.endpoint) return;
+  const { endpoint, direction } = cue;
+  const scale = canvasCueScale(ctx);
+  const top = { x: endpoint.x - direction * 28 * scale, y: endpoint.y - 24 * scale };
+  const bottom = { x: endpoint.x - direction * 28 * scale, y: endpoint.y + 24 * scale };
+  const tip = { x: endpoint.x + direction * 28 * scale, y: endpoint.y };
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(7,6,5,.9)";
+  ctx.lineWidth = 14 * scale;
+  lines(ctx, [[top, tip], [bottom, tip]]);
+  ctx.stroke();
+  ctx.strokeStyle = COLORS.enamelLight;
+  ctx.lineWidth = 6 * scale;
+  lines(ctx, [[top, tip], [bottom, tip]]);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawMemoryGroundTraces(ctx, state, traces, now) {
   const plan = classicMemoryGroundTracePlan(traces);
   if (plan.length === 0) return;
+  const escapeCue = classicMemoryEscapeChevronPlan(state);
   const bossMotion = classicBossMotionPlan(state, now);
   const connecting = state.phase === PHASE.COMBINE || Boolean(state.lock);
   const rackSign = classicMemoryRackSidePlan(state);
@@ -1355,18 +1500,25 @@ function drawMemoryGroundTraces(ctx, state, traces, now) {
     const direction = trace.side === "left" ? -1 : 1;
     const point = trace.point;
     const socket = classicMemorySocketPlan(bossMotion.bodyBase, trace.index, rackSign);
-    ctx.globalAlpha = 0.72;
-    ctx.strokeStyle = "rgba(8,7,6,.82)";
-    ctx.lineWidth = 7;
-    line(ctx, { x: point.x - direction * 12, y: point.y }, { x: point.x + direction * 16, y: point.y });
-    ctx.stroke();
-    ctx.strokeStyle = COLORS.enamelLight;
-    ctx.lineWidth = 3;
-    line(ctx, { x: point.x - direction * 12, y: point.y }, { x: point.x + direction * 16, y: point.y });
-    ctx.stroke();
-    ctx.fillStyle = COLORS.enamel;
-    ellipse(ctx, point, 13, 5);
-    ctx.fill();
+    const isEscapeEndpoint = escapeCue.active
+      && Math.abs(point.x - escapeCue.endpoint.x) <= .01
+      && Math.abs(point.y - escapeCue.endpoint.y) <= .01;
+    if (isEscapeEndpoint) {
+      drawMemoryEscapeChevron(ctx, escapeCue);
+    } else {
+      ctx.globalAlpha = 0.72;
+      ctx.strokeStyle = "rgba(8,7,6,.82)";
+      ctx.lineWidth = 7;
+      line(ctx, { x: point.x - direction * 12, y: point.y }, { x: point.x + direction * 16, y: point.y });
+      ctx.stroke();
+      ctx.strokeStyle = COLORS.enamelLight;
+      ctx.lineWidth = 3;
+      line(ctx, { x: point.x - direction * 12, y: point.y }, { x: point.x + direction * 16, y: point.y });
+      ctx.stroke();
+      ctx.fillStyle = COLORS.enamel;
+      ellipse(ctx, point, 13, 5);
+      ctx.fill();
+    }
     if (connecting) {
       ctx.globalAlpha = 0.12 + trace.index * 0.05;
       ctx.strokeStyle = COLORS.brassLight;
@@ -1654,6 +1806,13 @@ function drawMemoryRack(ctx, state, base, now, art) {
       ctx.lineWidth = 3;
       line(ctx, start, plaque);
       ctx.stroke();
+      ctx.globalAlpha = .22 + memoryMotion.insertion * .18;
+      ctx.strokeStyle = COLORS.brassLight;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 8]);
+      line(ctx, plaque, slot);
+      ctx.stroke();
+      ctx.setLineDash([]);
       ctx.restore();
     }
     const usedArt = drawImagePart(
@@ -2896,137 +3055,126 @@ function drawGroundHint(ctx, at, label, color, direction = 0, cueScale = canvasC
   ctx.restore();
 }
 
-export function classicFirstRunGuidanceStage(state) {
-  if (state.round !== 1 || state.phase === PHASE.GAME_OVER || state.phase === PHASE.WAITING) {
-    return null;
-  }
-  const elapsed = Number.isFinite(state.elapsed) ? state.elapsed : 0;
-  if (
-    state.phase === PHASE.ENGAGE &&
-    state.memory.length === 0 &&
-    !state.lock
-  ) {
-    return "tracking";
-  }
-  if (
-    state.phase === PHASE.EXPLORE &&
-    elapsed >= 0 &&
-    state.memory.length < 3 &&
-    !state.lock
-  ) {
-    return "escape";
-  }
-  if (
-    state.lock &&
-    state.predictedSide &&
-    (state.phase === PHASE.COMBINE || state.phase === PHASE.LOCK || state.phase === PHASE.PREDICTION)
-  ) {
-    return "opposite";
-  }
-  if (state.phase === PHASE.CORE_OPEN) {
-    const opportunity = classicCoreOpportunityPlan(state);
-    if (opportunity.hits >= 2) return "exit";
-    if (state.stats?.coreHits !== 0) return null;
-    const duration = timingForRound(Number.isFinite(state.round) ? state.round : 1).coreOpen;
-    const openAge = Math.max(0, duration - (state.phaseTime || 0));
-    if (openAge >= 0.09) return "core";
-  }
-  return null;
+export const CLASSIC_TUTORIAL_CUE_SECONDS = .6;
+
+export function createClassicTutorialCueState() {
+  return { seenEventIds: new Set(), seenKinds: new Set(), cue: null };
 }
 
-function drawFirstRunGuidance(ctx, state, now) {
-  const stage = classicFirstRunGuidanceStage(state);
-  if (!stage) return;
+export function consumeClassicTutorialCueEvents(cueState, state, events, now) {
+  for (const event of events || []) {
+    if (event.type === "start" || event.type === "restart") {
+      cueState.seenEventIds.clear(); cueState.seenKinds.clear(); cueState.cue = null;
+      continue;
+    }
+    if (state.round !== 1 || !Number.isFinite(event.id) || cueState.seenEventIds.has(event.id)) continue;
+    let kind = null;
+    if (event.type === "explore_warning" && state.memory.length < 3) kind = "wasd";
+    else if (event.type === "lock") kind = "opposite";
+    else if (event.type === "outsmart") kind = "attack";
+    else if (event.type === "core_hit" && event.windowHits >= 2) kind = "exit";
+    if (!kind) continue;
+    cueState.seenEventIds.add(event.id);
+    if (kind !== "wasd" && kind !== "exit" && cueState.seenKinds.has(kind)) continue;
+    if (kind !== "wasd") cueState.seenKinds.add(kind);
+    cueState.cue = Object.freeze({
+      kind,
+      eventId: event.id,
+      side: event.side || state.predictedSide || null,
+      sampleNumber: kind === "wasd" ? state.memory.length + 1 : null,
+      startedAt: now,
+      expiresAt: kind === "wasd" ? Infinity : now + CLASSIC_TUTORIAL_CUE_SECONDS,
+    });
+  }
+  return cueState.cue;
+}
+
+export function classicExploreTutorialLabel(cue, clientWidth = LOGICAL_WIDTH, coarsePointer = false) {
+  const sample = clamp(Number(cue?.sampleNumber) || 1, 1, 3);
+  const touch = coarsePointer || clientWidth <= 420;
+  return Object.freeze({
+    mode: touch ? "touch" : "keyboard",
+    text: touch ? `TAP ← ${sample}/3 →` : `WASD · ${sample}/3`,
+  });
+}
+
+export function classicTutorialCueVisible(cue, state, now) {
+  if (!cue) return false;
+  if (cue.kind !== "wasd") return now <= cue.expiresAt;
+  return state?.round === 1
+    && state?.phase === PHASE.EXPLORE
+    && Array.isArray(state.memory)
+    && state.memory.length === (cue.sampleNumber || 1) - 1;
+}
+
+function drawExitArrow(ctx, state) {
+  const exit = classicCoreExitCuePlan(state);
+  const { direction, normal, arrowStart, arrowEnd } = exit;
+  ctx.save();
+  ctx.strokeStyle = "rgba(8,7,6,.9)";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 10;
+  lines(ctx, [
+    [arrowStart, arrowEnd],
+    [{ x: arrowEnd.x - direction.x * 22 + normal.x * 12, y: arrowEnd.y - direction.y * 22 + normal.y * 12 }, arrowEnd],
+    [{ x: arrowEnd.x - direction.x * 22 - normal.x * 12, y: arrowEnd.y - direction.y * 22 - normal.y * 12 }, arrowEnd],
+  ]);
+  ctx.stroke();
+  ctx.strokeStyle = COLORS.enamelLight;
+  ctx.lineWidth = 5;
+  lines(ctx, [
+    [arrowStart, arrowEnd],
+    [{ x: arrowEnd.x - direction.x * 22 + normal.x * 12, y: arrowEnd.y - direction.y * 22 + normal.y * 12 }, arrowEnd],
+    [{ x: arrowEnd.x - direction.x * 22 - normal.x * 12, y: arrowEnd.y - direction.y * 22 - normal.y * 12 }, arrowEnd],
+  ]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFirstRunGuidance(ctx, state, now, cue) {
+  if (!classicTutorialCueVisible(cue, state, now)) return;
   const player = projectWorld(state.player);
-  if (stage === "tracking") {
-    const pulse = 0.72 + Math.sin(now * 11) * 0.16;
-    ctx.save();
-    ctx.globalAlpha = pulse;
+  if (cue.kind === "wasd") {
+    const presentation = classicExploreTutorialLabel(
+      cue,
+      ctx?.canvas?.clientWidth,
+      Boolean(globalThis.matchMedia?.("(pointer: coarse)")?.matches),
+    );
     drawGroundHint(
       ctx,
       { x: player.x, y: Math.min(620, player.y + 58) },
-      "추적 중",
-      COLORS.heat,
-    );
-    ctx.restore();
-    return;
-  }
-  if (stage === "escape") {
-    const cue = classicExploreCuePlan(state, ctx?.canvas?.clientWidth);
-    const pulse = 0.78 + Math.sin(now * 9) * 0.14;
-    ctx.save();
-    ctx.globalAlpha = pulse;
-    drawGroundHint(
-      ctx,
-      cue.active ? cue.hint : { x: player.x, y: Math.min(620, player.y + 58) },
-      `${cue.sampleNumber || state.memory.length + 1} / 3`,
+      presentation.text,
       COLORS.enamelLight,
       0,
-      cue.cueScale || canvasCueScale(ctx),
+      presentation.mode === "touch" ? Math.max(canvasCueScale(ctx), 2.1) : canvasCueScale(ctx),
     );
-    ctx.restore();
     return;
   }
-
-  if (stage === "opposite") {
-    const direction = state.predictedSide === "right" ? -1 : 1;
-    const origin = projectWorld(state.lock.origin || state.boss);
+  if (cue.kind === "opposite") {
+    const direction = cue.side === "right" ? -1 : 1;
+    const origin = projectWorld(state.lock?.zone || state.boss);
     drawGroundHint(
       ctx,
       { x: clamp(origin.x + direction * 155, 175, 1105), y: clamp(origin.y + 116, 190, 620) },
-      "LOCK · 반대로",
+      "",
       COLORS.enamelLight,
       direction,
     );
     return;
   }
-
-  if (stage === "core") {
+  if (cue.kind === "attack") {
     const core = classicCoreScreenAnchor(state, now);
     const cue = pointAlong(player, core, 0.28);
     drawGroundHint(
       ctx,
       { x: clamp(cue.x, 155, 1125), y: clamp(cue.y + 48, 180, 620) },
-      "접근 · J",
+      "J",
       "#fffdf1",
     );
     return;
   }
-
-  if (stage === "exit") {
-    const opportunity = classicCoreOpportunityPlan(state);
-    const exit = classicCoreExitCuePlan(state);
-    const { player: cuePlayer, direction, normal, arrowStart, arrowEnd } = exit;
-    ctx.save();
-    ctx.strokeStyle = "rgba(8,7,6,.9)";
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 10;
-    lines(ctx, [
-      [arrowStart, arrowEnd],
-      [{ x: arrowEnd.x - direction.x * 22 + normal.x * 12, y: arrowEnd.y - direction.y * 22 + normal.y * 12 }, arrowEnd],
-      [{ x: arrowEnd.x - direction.x * 22 - normal.x * 12, y: arrowEnd.y - direction.y * 22 - normal.y * 12 }, arrowEnd],
-    ]);
-    ctx.stroke();
-    ctx.strokeStyle = COLORS.enamelLight;
-    ctx.lineWidth = 5;
-    lines(ctx, [
-      [arrowStart, arrowEnd],
-      [{ x: arrowEnd.x - direction.x * 22 + normal.x * 12, y: arrowEnd.y - direction.y * 22 + normal.y * 12 }, arrowEnd],
-      [{ x: arrowEnd.x - direction.x * 22 - normal.x * 12, y: arrowEnd.y - direction.y * 22 - normal.y * 12 }, arrowEnd],
-    ]);
-    ctx.stroke();
-    ctx.restore();
-    drawGroundHint(
-      ctx,
-      {
-        x: clamp(mix(cuePlayer.x, arrowEnd.x, 0.58), 150, 1130),
-        y: clamp(mix(cuePlayer.y, arrowEnd.y, 0.58) + 28, 170, 620),
-      },
-      opportunity.hits >= 3 ? "3타 · 즉시 이탈" : "2타 · 이탈 준비",
-      COLORS.enamelLight,
-    );
-  }
+  if (cue.kind === "exit") drawExitArrow(ctx, state);
 }
 
 function drawMinimalGameOver(ctx, state) {
@@ -3078,6 +3226,8 @@ export function renderGame(
     dynamics = null,
     memoryTraces = [],
     characterLayer = null,
+    tutorialCue = null,
+    onArenaDraw = null,
   } = {},
 ) {
   ctx.save();
@@ -3085,10 +3235,14 @@ export function renderGame(
   ctx.fillStyle = COLORS.deepSoot;
   ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
   drawArena(ctx, now);
+  onArenaDraw?.();
 
   const scene = state.phase === PHASE.WAITING ? waitingState() : state;
-  drawTrackingTrace(ctx, scene, now);
-  drawExploreWarning(ctx, scene);
+  const spriteDriverJoint = typeof characterLayer?.getBossDriverJoint === "function"
+    ? characterLayer.getBossDriverJoint(scene, { now })
+    : null;
+  drawExploreWarning(ctx, scene, tutorialCue, now);
+  drawTrackingGate(ctx, scene, now, spriteDriverJoint);
   drawKilnTarget(ctx, scene, now, art);
   drawDashSkid(ctx, scene);
   drawCoreApproachPath(ctx, scene, now);
@@ -3106,7 +3260,7 @@ export function renderGame(
   }
   drawImpact(ctx, scene, now, art);
   drawDynamicParticles(ctx, dynamics);
-  drawFirstRunGuidance(ctx, scene, now);
+  drawFirstRunGuidance(ctx, scene, now, tutorialCue);
   if (state.phase === PHASE.GAME_OVER) drawMinimalGameOver(ctx, state);
   ctx.restore();
 }
@@ -3145,6 +3299,7 @@ export function createRenderer(canvas, { characterLayer = null } = {}) {
       playerDrawOrder: null,
       playerArmAnchorError: null,
       readyBladeOutsideCssAt320: null,
+      arenaDraws: 0,
       characterLayer: validCharacterLayer(characterLayer) ? "override" : "classic",
     },
     onStatusChange: null,
@@ -3156,9 +3311,12 @@ export function createRenderer(canvas, { characterLayer = null } = {}) {
   let memoryGroundTraces = [];
   let pendingMemoryContinuation = null;
   const memoryTraceEventIds = new Set();
+  const tutorialCues = createClassicTutorialCueState();
 
   function updateDynamics(state, now) {
     const events = Array.isArray(state.events) ? state.events : [];
+    const tutorialCue = consumeClassicTutorialCueEvents(tutorialCues, state, events, now);
+    renderer.info.tutorialCue = classicTutorialCueVisible(tutorialCue, state, now) ? tutorialCue.kind : null;
     if (events.some((event) => event.type === "start" || event.type === "restart")) {
       dynamics.reset();
       memoryGroundTraces = [];
@@ -3283,6 +3441,7 @@ export function createRenderer(canvas, { characterLayer = null } = {}) {
     renderer.info.playerDrawOrder = null;
     renderer.info.playerArmAnchorError = null;
     renderer.info.readyBladeOutsideCssAt320 = null;
+    renderer.info.arenaDraws = 0;
     resize();
     const now = Number.isFinite(options.now) ? options.now : 0;
     updateDynamics(state, now);
@@ -3294,6 +3453,8 @@ export function createRenderer(canvas, { characterLayer = null } = {}) {
       dynamics,
       memoryTraces: memoryGroundTraces,
       characterLayer: activeCharacterLayer,
+      tutorialCue: tutorialCues.cue,
+      onArenaDraw: () => { renderer.info.arenaDraws += 1; },
     });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }

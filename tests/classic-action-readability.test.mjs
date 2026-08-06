@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PHASE, createGameState, timingForRound } from "../src/game-core.mjs";
+import { CONFIG, PHASE, createGameState, timingForRound } from "../src/game-core.mjs";
 import {
   classicAttackVisualPlan,
   classicBladeContactPlan,
+  classicBossMotionPlan,
   classicCoreScreenAnchor,
   classicCoreVisualPlan,
-  classicFirstRunGuidanceStage,
+  CLASSIC_TUTORIAL_CUE_SECONDS,
+  classicMemoryEscapeChevronPlan,
+  classicExploreTutorialLabel,
+  classicTrackingGatePlan,
+  classicTrackingGateConnectionPlan,
+  classicTutorialCueVisible,
+  consumeClassicTutorialCueEvents,
+  createClassicTutorialCueState,
+  projectWorld,
 } from "../src/render-classic.mjs";
 
 function attackState(remaining, { hit = false, armor = false } = {}) {
@@ -78,36 +87,86 @@ test("OUTSMART exposure alone never manufactures a hit response", () => {
   assert.equal(plan.shutterKick, 0);
 });
 
-test("first-run guidance follows the physical cause instead of preceding it", () => {
+test("first-run explore cues repeat once per physical sample and reset on a new run", () => {
+  const state = createGameState({ started: true });
+  state.phase = PHASE.EXPLORE;
+  state.explore = { lineX: 0, sampleEligible: true };
+  const cues = createClassicTutorialCueState();
+  const explore = { id: 11, type: "explore_warning" };
+  const first = consumeClassicTutorialCueEvents(cues, state, [explore], 2);
+  assert.equal(first.kind, "wasd"); assert.equal(first.sampleNumber, 1); assert.equal(first.expiresAt, Infinity);
+  assert.equal(classicTutorialCueVisible(first, state, 2 + CLASSIC_TUTORIAL_CUE_SECONDS * 3), true, "the first cue remains through its explore window");
+  assert.equal(consumeClassicTutorialCueEvents(cues, state, [explore], 2.1), first, "the same event cannot renew a rendered cue");
+  state.memory = ["left"];
+  const second = consumeClassicTutorialCueEvents(cues, state, [{ id: 12, type: "explore_warning" }], 2.2);
+  assert.equal(second.kind, "wasd"); assert.equal(second.sampleNumber, 2);
+  state.memory = ["left", "right"];
+  const third = consumeClassicTutorialCueEvents(cues, state, [{ id: 13, type: "explore_warning" }], 2.3);
+  assert.equal(third.kind, "wasd"); assert.equal(third.sampleNumber, 3);
+  state.memory = ["left", "right", "left"];
+  assert.equal(consumeClassicTutorialCueEvents(cues, state, [{ id: 14, type: "explore_warning" }], 2.4), third, "a full memory rack cannot start a fourth explore cue");
+  assert.deepEqual(classicExploreTutorialLabel(first, 1280), { mode: "keyboard", text: "WASD · 1/3" });
+  assert.deepEqual(classicExploreTutorialLabel(third, 320), { mode: "touch", text: "TAP ← 3/3 →" });
+  assert.deepEqual(classicExploreTutorialLabel(second, 1280, true), { mode: "touch", text: "TAP ← 2/3 →" });
+  state.phase = PHASE.EXPLORE_RECOVER;
+  assert.equal(classicTutorialCueVisible(third, state, 9), false, "the cue vanishes immediately on explore resolution");
+  state.phase = PHASE.EXPLORE;
+  state.memory = [];
+  const lock = { id: 15, type: "lock", side: "right" };
+  assert.equal(consumeClassicTutorialCueEvents(cues, state, [lock], 2.5).kind, "opposite");
+  assert.equal(consumeClassicTutorialCueEvents(cues, state, [{ id: 16, type: "outsmart", side: "right" }], 2.6).kind, "attack");
+  assert.equal(consumeClassicTutorialCueEvents(cues, state, [{ id: 17, type: "core_hit", windowHits: 2 }], 2.7).kind, "exit");
+  assert.equal(consumeClassicTutorialCueEvents(cues, state, [{ id: 18, type: "core_hit", windowHits: 3 }], 2.8).kind, "exit", "each physical late hit gets only its own 600ms exit arrow");
+  consumeClassicTutorialCueEvents(cues, state, [{ id: 19, type: "restart" }], 3);
+  assert.equal(consumeClassicTutorialCueEvents(cues, state, [{ id: 11, type: "explore_warning" }], 3.1).kind, "wasd", "restart resets every explore event id");
+});
+
+test("the successful escape chevron shares the memory flight endpoint for 420ms", () => {
+  const state = createGameState({ started: true });
+  state.visual.escapeMarker = { x: 144, y: 92, side: "right", duration: .72, remaining: .31 };
+  const cue = classicMemoryEscapeChevronPlan(state);
+  assert.equal(cue.active, true); assert.equal(cue.direction, 1);
+  assert.deepEqual(cue.endpoint, projectWorld(state.visual.escapeMarker));
+  state.visual.escapeMarker.remaining = .29;
+  assert.equal(classicMemoryEscapeChevronPlan(state).active, false);
+});
+
+test("first-round tracking gate follows the live player, then freezes at the exact explore lane", () => {
   const state = createGameState({ started: true });
   state.round = 1;
-  state.elapsed = 0.2;
+  state.memory = [];
   state.phase = PHASE.ENGAGE;
-  assert.equal(classicFirstRunGuidanceStage(state), "tracking");
+  state.player = { ...state.player, x: -88, y: 42 };
+  const first = classicTrackingGatePlan(state);
+  assert.equal(first.active, true); assert.equal(first.moving, true); assert.equal(first.fixed, false);
+  assert.equal(first.targetWorld.x, -88);
+  assert.equal(first.halfWorld, CONFIG.exploreLaneHalfWidth);
+  const memoryBefore = [...state.memory];
+
+  state.player.x = 116;
+  const dragged = classicTrackingGatePlan(state);
+  assert.equal(dragged.targetWorld.x, 116, "the whole gate follows the live tracked x in ENGAGE");
+  assert.notEqual(dragged.target.x, first.target.x);
+  assert.deepEqual(state.memory, memoryBefore, "the renderer gate cannot manufacture a remember mark");
 
   state.phase = PHASE.EXPLORE;
-  assert.equal(classicFirstRunGuidanceStage(state), "escape");
-  state.memory = ["left"];
-  state.elapsed = 4.2;
-  assert.equal(classicFirstRunGuidanceStage(state), "escape");
-  state.memory = ["left", "right"];
-  assert.equal(classicFirstRunGuidanceStage(state), "escape");
-  state.memory = ["left", "right", "left"];
-  assert.equal(classicFirstRunGuidanceStage(state), null);
+  state.phaseTime = timingForRound(1).explore;
+  state.explore = { lineX: -31, sampleEligible: true };
+  state.player.x = 171;
+  const frozen = classicTrackingGatePlan(state);
+  assert.equal(frozen.active, true); assert.equal(frozen.moving, false); assert.equal(frozen.fixed, true);
+  assert.equal(frozen.targetWorld.x, -31);
+  assert.notEqual(frozen.targetWorld.x, state.player.x, "the frozen gate never chases the exit");
+  assert.equal(frozen.halfWorld, CONFIG.exploreLaneHalfWidth);
+});
 
-  state.phase = PHASE.LOCK;
-  state.lock = { side: "right", origin: { x: 0, y: 80 }, zone: { x: 154, y: -4 } };
-  state.predictedSide = "right";
-  assert.equal(classicFirstRunGuidanceStage(state), "opposite");
-
-  state.phase = PHASE.CORE_OPEN;
-  state.boss.coreOpen = true;
-  state.phaseTime = timingForRound(1).coreOpen;
-  assert.equal(classicFirstRunGuidanceStage(state), null);
-  state.phaseTime -= 0.1;
-  assert.equal(classicFirstRunGuidanceStage(state), "core");
-
-  state.coreHitsThisWindow = 2;
-  state.stats.coreHits = 2;
-  assert.equal(classicFirstRunGuidanceStage(state), "exit");
+test("classic fallback keeps the gate cable connected to its own driver root", () => {
+  const state = createGameState({ started: true });
+  state.round = 1; state.phase = PHASE.ENGAGE; state.player = { ...state.player, x: -64, y: 112 };
+  const fallback = classicTrackingGateConnectionPlan(state, null, .3);
+  const motion = classicBossMotionPlan(state, .3);
+  assert.equal(fallback.active, true);
+  assert.deepEqual(fallback.joint, motion.shoulder);
+  assert.equal(fallback.header.x, fallback.gate.target.x);
+  assert.ok(fallback.left.x < fallback.header.x && fallback.header.x < fallback.right.x);
 });

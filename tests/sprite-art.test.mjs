@@ -3,8 +3,9 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
 
-import { PHASE, createGameState } from "../src/game-core.mjs";
-import { rigAnchorMetrics, rigDrawPlan, validateRigCompositeSet, validateRigSpriteSet } from "../src/render-sprite.mjs";
+import { CONFIG, PHASE, createGameState } from "../src/game-core.mjs";
+import { classicTrackingGateConnectionPlan } from "../src/render-classic.mjs";
+import { rigAnchorMetrics, rigBossDriverJoint, rigDrawPlan, validateRigCompositeSet, validateRigSpriteSet } from "../src/render-sprite.mjs";
 import { SPRITE_REQUIRED_ANCHORS, SPRITE_REQUIRED_FRAMES, validateSpriteManifest } from "../src/sprite-art-contract.mjs";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -134,4 +135,31 @@ test("malformed rig manifests reject before a character layer can replace classi
   delete malformed.frames["driver-tip"].anchors.driver_tip;
   assert.equal(validateSpriteManifest(malformed), false);
   assert.equal(validateRigSpriteSet(malformed).pass, false);
+});
+
+test("the first-round gate cable begins at the active authored driver joint and stays continuous through fixation", async () => {
+  const art = await manifest();
+  const moving = createGameState({ started: true });
+  moving.round = 1; moving.phase = PHASE.ENGAGE; moving.phaseTime = .42;
+  moving.player = { ...moving.player, x: 96, y: 112 };
+  const movingJoint = rigBossDriverJoint(moving, art, 1.1);
+  const movingConnection = classicTrackingGateConnectionPlan(moving, movingJoint, 1.1);
+  assert.equal(movingConnection.active, true);
+  assert.ok(Math.hypot(movingConnection.joint.x - movingJoint.x, movingConnection.joint.y - movingJoint.y) <= 1);
+  assert.equal(movingConnection.gate.halfWorld, CONFIG.exploreLaneHalfWidth);
+  assert.equal(movingConnection.header.x, movingConnection.gate.target.x);
+  assert.equal(movingConnection.header.y, movingConnection.left.y);
+  assert.equal(movingConnection.header.y, movingConnection.right.y);
+  assert.ok(Math.abs((movingConnection.right.x - movingConnection.left.x) - movingConnection.gate.half * 2) <= 1e-9);
+
+  const fixed = structuredClone(moving);
+  fixed.phase = PHASE.EXPLORE; fixed.phaseTime = 1.12;
+  fixed.explore = { lineX: 96, sampleEligible: true };
+  fixed.player.x = -122;
+  const fixedJoint = rigBossDriverJoint(fixed, art, 1.12);
+  const fixedConnection = classicTrackingGateConnectionPlan(fixed, fixedJoint, 1.12);
+  assert.equal(fixedConnection.gate.fixed, true);
+  assert.ok(Math.hypot(fixedConnection.joint.x - fixedJoint.x, fixedConnection.joint.y - fixedJoint.y) <= 1);
+  assert.deepEqual(fixedConnection.header, movingConnection.header, "the joint-to-header cable cannot pop on ENGAGE→EXPLORE");
+  assert.deepEqual(fixedConnection.joint, movingConnection.joint, "the active idle-body joint remains the same authored anchor");
 });
