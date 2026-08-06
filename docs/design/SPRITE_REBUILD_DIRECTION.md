@@ -60,17 +60,28 @@
 
 ## 스프라이트 제작 계약
 
+### 런타임 타당성 교정 — 전신 키포즈 + authored 관절 레이어
+
+`lock.zone`은 플레이어의 실제 위치에서 좌우로 계산되므로 보스 루트에 대한 각도와 거리가 연속적으로 달라진다. 따라서 고정된 전신 PNG 한 장의 `driver_tip`을 모든 LOCK 좌표에 1px로 맞추는 것은 불가능하다. 플레이어 역시 어느 방향에서 코어를 공격하느냐에 따라 검의 접촉 각도가 달라진다.
+
+- 전신 키포즈는 캐릭터의 무게 중심, 몸통 비틀림, 지지팔 압축, 망토와 큰 실루엣을 담당하며 `root` 또는 `feet` 기준으로 이동만 한다. 전신을 접촉점에 맞추기 위해 회전·확대·축소·미러링하지 않는다.
+- 플레이어의 검은 손그림 `blade` 레이어로 분리하고 `sword_grip` 한 관절에서만 회전한다. 검 길이는 고정하며 기존 공격 접촉 계획이 계산한 방향을 사용한다.
+- 보스 파일드라이버는 손그림 `joint-cuff`, `telescoping-shaft`, `driver-tip` 레이어로 분리한다. `driver_joint`에서 LOCK 순간 한 번 정한 축으로만 회전하고, 중간 축만 길이 방향으로 장전·신장한다. 팁과 몸통은 비등방 변형하지 않는다.
+- LOCK 뒤에는 관절 축, 케이블 방향, `driver_tip` 목표가 모두 고정된다. MISS는 같은 축에서 신장량만 바뀌며 표적을 추적하지 않는다.
+- 관절 접합부는 상아 커프와 먹빛 겹침 아래 가려 한 몸처럼 보여야 한다. 분리 파츠가 떠 있거나 단순 선·막대·도형으로 보이면 실패다.
+- 이 예외는 검과 파일드라이버의 정확한 접촉에만 허용한다. 몸통, 머리, 망토, 지지팔, 명판과 코어를 런타임 변형으로 대신하지 않는다.
+
 ### 원본과 빌드
 
-- 생성 대표 장면이나 동작 시트를 잘라 런타임에 넣지 않는다.
+- 생성 대표 장면이나 검토용 동작 시트를 그대로 잘라 런타임에 넣지 않는다. 선택된 좌우 시안은 실루엣·자세 기준이며, 런타임에는 관절 접합부와 투명 여백을 정리한 별도 동작 원본을 사용한다.
 - ImageGen은 마스터 디자인과 키포즈 탐색에 사용한다. 실제 자산 생성 단계는 별도의 동작별 원본으로 진행하고, 정체성·시점·팔레트·윤곽·anchor를 정리한 뒤에만 후보가 된다.
 - 저장소에는 동작별 무손실 master frame, 고정 팔레트, anchor manifest와 결정적 strip build를 함께 보존한다. 지원되는 경우 레이어 원본도 함께 둔다.
 - 런타임은 동작별 투명 PNG strip과 JSON manifest를 저장소 상대 경로로 불러온다. 하나의 통짜 atlas, 런타임 CDN과 외부 요청은 사용하지 않는다.
 - 소스 셀은 512×384, 런타임 셀은 256×192를 기준으로 하며 공통 foot anchor는 각각 `(256,336)`, `(128,168)`이다.
-- 모든 프레임은 같은 sprite transform으로 해석되는 named anchor를 manifest에 기록한다. 플레이어는 `feet`, `sword_grip`, `sword_tip`; 보스는 `root`, `driver_joint`, `driver_tip`, `core_center`, `brace_contact`, `memory_slot_1..3`을 해당 부위가 보이는 모든 프레임에 가진다.
+- 모든 프레임과 관절 파츠는 named anchor를 manifest에 기록한다. 플레이어 몸은 `feet`, `sword_grip`, 검 파츠는 `sword_grip`, `sword_tip`; 보스 몸은 `root`, `driver_joint`, `core_center`, `brace_contact`, `memory_slot_1..3`, 드라이버 파츠는 `driver_joint`, `driver_tip`을 가진다.
 - 검날이 프레임에 포함되어도 `sword_grip`과 `sword_tip`은 생략하지 않는다. LOCK·prediction 프레임의 `driver_joint`와 `driver_tip`, miss-open·core-hit 프레임의 `core_center`는 필수다.
-- 렌더러는 캐릭터 위치·스케일·방향에 적용한 **동일한 변환**으로 named anchor를 투영한다. 접촉을 맞추기 위한 프레임별 임의 offset, 별도 좌표 경로와 보스 좌우 미러링은 금지한다.
-- 플레이어 `feet`·게임 좌표·그림자 중심, prediction 해결 프레임의 `driver_tip`·LOCK 중심, 직접 타격 프레임의 `sword_tip`·`core_center`·충격점은 데스크톱과 320×180 실제 출력에서 각각 1px 이내여야 한다.
+- 렌더러는 몸 전체에 하나의 고정 scale과 무회전 body transform을 사용한다. 검과 드라이버만 위 관절 레이어 규칙으로 합성하며, 프레임별 임의 offset, 별도 가짜 접촉 좌표와 보스 좌우 미러링은 금지한다.
+- 플레이어 `feet`·게임 좌표·그림자 중심, prediction 해결 프레임의 합성된 `driver_tip`·LOCK 중심, 직접 타격 프레임의 합성된 `sword_tip`·`core_center`·충격점은 데스크톱과 320×180 실제 출력에서 각각 1px 이내여야 한다.
 - 한 캐릭터의 큰 명암은 네 단계 이내로 제한하고 균일한 검은 외곽선을 쓰지 않는다.
 - 전체 압축 자산은 4MB, 디코드 메모리는 18MB를 넘지 않는다. 모바일 DPR 상한은 1.5다.
 
@@ -112,7 +123,7 @@
 
 ## 구현 순서와 게이트
 
-1. **ART FIRST PLAYABLE:** player idle/contact와 boss idle/LOCK/miss-open 네 장면만 연결한다.
+1. **ART FIRST PLAYABLE:** player idle/contact 몸과 authored blade, boss idle/좌우 LOCK·miss-open 몸과 authored telescoping driver를 연결한다.
 2. **ACTION COMPLETE:** move/dash/slash/recoil와 보스 전 인과를 연결한다.
 3. **SFX PASS:** BGM 없이 핵심 사건음을 재질별로 구분한다.
 4. **BGM PASS:** 한 loop를 A/B 비교해 타격을 약하게 만들면 제외한다.
