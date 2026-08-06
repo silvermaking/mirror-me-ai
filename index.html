@@ -9,7 +9,7 @@
       content="당신의 습관을 읽는 AI 보스를 속이는 짧은 아레나 액션 게임"
     />
     <title>Mirror Me AI</title>
-    <link rel="stylesheet" href="./styles.css?v=classic-asset-2" />
+    <link rel="stylesheet" href="./styles.css?v=hud-pass-1" />
     <script type="importmap">
       {
         "imports": {
@@ -33,28 +33,35 @@
           이 브라우저는 Canvas 게임 화면을 지원하지 않습니다.
         </canvas>
 
+        <section id="combat-rail" class="combat-rail" aria-label="전투 계기" hidden>
+          <span id="hud-round" class="hud-round" aria-label="ROUND 1">R1</span>
+          <ol id="hud-shields" class="hud-marks hud-shields" aria-label="보호막 3칸">
+            <li aria-label="보호막"></li><li aria-label="보호막"></li><li aria-label="보호막"></li>
+          </ol>
+          <ol id="hud-boss-hp" class="hud-marks hud-boss-hp" aria-label="보스 코어 체력 6칸">
+            <li></li><li></li><li></li><li></li><li></li><li></li>
+          </ol>
+          <ol id="hud-memory" class="hud-memory" aria-label="보스가 기억한 회피 방향">
+            <li data-side="none" aria-label="첫 번째 기억 비어 있음"></li>
+            <li data-side="none" aria-label="두 번째 기억 비어 있음"></li>
+            <li data-side="none" aria-label="세 번째 기억 비어 있음"></li>
+          </ol>
+        </section>
+
         <section
           id="start-overlay"
           class="start-overlay"
-          aria-labelledby="game-title"
+          aria-label="Mirror Me 전투 시작"
           aria-describedby="game-hook"
         >
           <div class="start-copy">
             <p id="loading-copy" class="loading-copy">전장을 준비하는 중…</p>
-            <p class="start-kicker">MIRROR TEST · 001</p>
-            <h1 id="game-title">Mirror Me</h1>
             <p id="game-hook" class="game-hook">
-              <strong>당신이 피한 방향을, 보스는 기억한다.</strong>
-              <span class="start-cue">시선이 멈춘 순간, 주홍선 밖으로.</span>
+              당신이 피한 방향을, 보스는 기억한다.
               <span class="visually-hidden">첫 세 번의 회피가 보스의 다음 공격이 된다. 열린 코어 직접 공격.</span>
             </p>
-            <div class="start-rule" aria-label="전투 규칙">
-              <span><b>WASD · SPACE</b> 이동 · 대시는 무적 아님</span>
-              <span><b>J / 공격</b> 검 휘두르기</span>
-            </div>
             <button id="start-button" class="start-button" type="button">
               <span>전투 시작</span>
-              <small>이동 · 대시 · 공격 입력으로 즉시 시작</small>
             </button>
           </div>
         </section>
@@ -81,7 +88,8 @@
 
             <p id="game-over-run" class="death-run">ROUND 1 · 0 PTS · 00:00.0 · OUTSMART 0</p>
             <p id="game-over-best" class="death-best">최고 기록 R1 · 0점 · 속임 0회</p>
-            <p id="game-over-restart" class="death-restart">분석 중…</p>
+            <p id="game-over-restart" class="death-restart visually-hidden">분석 중…</p>
+            <button id="retry-button" class="retry-button" type="button" disabled>재도전 준비</button>
           </div>
         </section>
 
@@ -125,6 +133,6 @@
       </section>
     </main>
 
-    <script type="module" src="./src/main.js?v=classic-asset-2"></script>
+    <script type="module" src="./src/main.js?v=hud-pass-1"></script>
   </body>
 </html>
