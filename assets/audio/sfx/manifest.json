@@ -1,0 +1,218 @@
+{
+  "events": {
+    "armor_hit": [
+      {
+        "delayMs": 0,
+        "sample": "porcelain-armor"
+      }
+    ],
+    "attack": [
+      {
+        "delayMs": 0,
+        "sample": "blade-air"
+      },
+      {
+        "delayMs": 18,
+        "sample": "blade-edge"
+      }
+    ],
+    "combine": [
+      {
+        "delayMs": 160,
+        "sample": "cable-gather"
+      }
+    ],
+    "core_hit": [
+      {
+        "delayMs": 0,
+        "sample": "core-contact"
+      }
+    ],
+    "lock": [
+      {
+        "delayMs": 0,
+        "sample": "lock-body"
+      },
+      {
+        "delayMs": 45,
+        "sample": "lock-latch"
+      }
+    ],
+    "outsmart": [
+      {
+        "delayMs": 0,
+        "sample": "empty-plate"
+      },
+      {
+        "delayMs": 70,
+        "sample": "chassis-collapse"
+      },
+      {
+        "delayMs": 130,
+        "sample": "core-open"
+      }
+    ],
+    "outsmart_confirmed": [],
+    "player_hit": [
+      {
+        "delayMs": 0,
+        "sample": "player-hit"
+      }
+    ],
+    "prediction_strike": [
+      {
+        "delayMs": 0,
+        "sample": "driver-load"
+      }
+    ],
+    "remember": [
+      {
+        "delayMs": 0,
+        "sample": "memory-latch-{memoryCount}"
+      }
+    ]
+  },
+  "files": {
+    "blade-air": {
+      "bytes": 13484,
+      "durationMs": 140,
+      "file": "blade-air.wav",
+      "frames": 6720,
+      "leadingSamples": 1,
+      "peakDbfs": -13.0,
+      "sha256": "b4dcbb8504a0c2320a6639262dc35b16c41e1fc8cdfc38445145d9297aa25ee0"
+    },
+    "blade-edge": {
+      "bytes": 5804,
+      "durationMs": 60,
+      "file": "blade-edge.wav",
+      "frames": 2880,
+      "leadingSamples": 1,
+      "peakDbfs": -11.0,
+      "sha256": "404b6c6c0575578840ca3eaf504cc3282c588c34010ee1e8299c8ef7eec2f8eb"
+    },
+    "cable-gather": {
+      "bytes": 23084,
+      "durationMs": 240,
+      "file": "cable-gather.wav",
+      "frames": 11520,
+      "leadingSamples": 1,
+      "peakDbfs": -12.0,
+      "sha256": "37140c27d35e3e00030ddeed7b846543002d72b090e0886d148fb08e296efbed"
+    },
+    "chassis-collapse": {
+      "bytes": 23084,
+      "durationMs": 240,
+      "file": "chassis-collapse.wav",
+      "frames": 11520,
+      "leadingSamples": 0,
+      "peakDbfs": -8.0,
+      "sha256": "5dbbbabd83a7c564dbb1f131e2f7b024d026fcb97a8ac7332c58ad580bfb744e"
+    },
+    "core-contact": {
+      "bytes": 24044,
+      "durationMs": 250,
+      "file": "core-contact.wav",
+      "frames": 12000,
+      "leadingSamples": 1,
+      "peakDbfs": -3.0,
+      "sha256": "638b5e0a929d7e9612f591b8d9c32845c0dab0118932de445f24b687b5c1d947"
+    },
+    "core-open": {
+      "bytes": 20204,
+      "durationMs": 210,
+      "file": "core-open.wav",
+      "frames": 10080,
+      "leadingSamples": 1,
+      "peakDbfs": -9.0,
+      "sha256": "84384294c4fac154d12b5beae0b07b88f471170ab145d70a246a7aa38aa04848"
+    },
+    "driver-load": {
+      "bytes": 28844,
+      "durationMs": 300,
+      "file": "driver-load.wav",
+      "frames": 14400,
+      "leadingSamples": 1,
+      "peakDbfs": -8.0,
+      "sha256": "8d3968b0d096043e5369682606645a3893a90ccfba086e39801d98436c37f3e1"
+    },
+    "empty-plate": {
+      "bytes": 11564,
+      "durationMs": 120,
+      "file": "empty-plate.wav",
+      "frames": 5760,
+      "leadingSamples": 1,
+      "peakDbfs": -6.5,
+      "sha256": "492896009d37c0e559a7376ba3f6dd2f5b3f894b8c7aa4a3a38904f8185fee5e"
+    },
+    "lock-body": {
+      "bytes": 28844,
+      "durationMs": 300,
+      "file": "lock-body.wav",
+      "frames": 14400,
+      "leadingSamples": 1,
+      "peakDbfs": -7.0,
+      "sha256": "d92b23c21127e72b8a80aa7993e7a30a9701240a54e813904a540b1854de5a16"
+    },
+    "lock-latch": {
+      "bytes": 7244,
+      "durationMs": 75,
+      "file": "lock-latch.wav",
+      "frames": 3600,
+      "leadingSamples": 1,
+      "peakDbfs": -8.0,
+      "sha256": "42caffe3c5f30c8179345c29cd9acb95de978ccb0213ed1d0c7ac555e564a533"
+    },
+    "memory-latch-1": {
+      "bytes": 10124,
+      "durationMs": 105,
+      "file": "memory-latch-1.wav",
+      "frames": 5040,
+      "leadingSamples": 1,
+      "peakDbfs": -12.0,
+      "sha256": "76ce7f6fe50519215ffd9df822597fc0c9b844630b15c5b5ad3084e4d95618da"
+    },
+    "memory-latch-2": {
+      "bytes": 10124,
+      "durationMs": 105,
+      "file": "memory-latch-2.wav",
+      "frames": 5040,
+      "leadingSamples": 1,
+      "peakDbfs": -11.0,
+      "sha256": "031c4c00cf8baa0644742b0f2470b1a4f51d255ac1c2ffb00fd7c65333d58b37"
+    },
+    "memory-latch-3": {
+      "bytes": 10124,
+      "durationMs": 105,
+      "file": "memory-latch-3.wav",
+      "frames": 5040,
+      "leadingSamples": 1,
+      "peakDbfs": -10.0,
+      "sha256": "62e75dc43355adadc090aec4b613bea900558abc6113978b23aaae14d0756041"
+    },
+    "player-hit": {
+      "bytes": 17324,
+      "durationMs": 180,
+      "file": "player-hit.wav",
+      "frames": 8640,
+      "leadingSamples": 0,
+      "peakDbfs": -5.0,
+      "sha256": "de84e276b8c5475105cd380b25704ab23c85c03f7e40bb78a1f3d9649e8cbf1b"
+    },
+    "porcelain-armor": {
+      "bytes": 10124,
+      "durationMs": 105,
+      "file": "porcelain-armor.wav",
+      "frames": 5040,
+      "leadingSamples": 1,
+      "peakDbfs": -7.5,
+      "sha256": "59223c0752d83b59ae29e9970c788cd7c812f576300d9b3526fe74daae4acebd"
+    }
+  },
+  "format": {
+    "channels": 1,
+    "encoding": "PCM16",
+    "sampleRate": 48000
+  },
+  "version": 1
+}
