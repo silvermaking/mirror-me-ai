@@ -6,15 +6,19 @@ import {
   CLASSIC_RELIC_PARTS,
 } from "./classic-art-contract.mjs";
 import {
+  CLASSIC_CORE_CONTACT_MARK_MS,
   CLASSIC_PLAYER_DRAW_ORDER,
   classicCoreOpportunityPlan,
   classicCoreReactionPlan,
+  classicMemoryVotePlan,
   classicPlayerPosePlan,
 } from "./classic-choreography.mjs";
 import { createVisualDynamics } from "./visual-dynamics.mjs";
 
 const LOGICAL_WIDTH = 1280;
 const LOGICAL_HEIGHT = 720;
+export const CLASSIC_CORE_MISS_GAP = 18;
+export const CLASSIC_COMPACT_CUE_SCALE = 1.55;
 const CLASSIC_PLAYER_DRAW_ORDER_LABEL = CLASSIC_PLAYER_DRAW_ORDER.join(">");
 const VIEW = Object.freeze({
   centerX: LOGICAL_WIDTH / 2,
@@ -25,8 +29,13 @@ const VIEW = Object.freeze({
 export const CLASSIC_MEMORY_DIRECTION_GLYPH = Object.freeze({
   logicalWidth: 31,
   logicalHeight: 28,
-  cssWidthAt320: 31 * 0.25,
-  cssHeightAt320: 28 * 0.25,
+  cssWidthAt320: 31 * 0.25 * CLASSIC_COMPACT_CUE_SCALE,
+  cssHeightAt320: 28 * 0.25 * CLASSIC_COMPACT_CUE_SCALE,
+});
+export const CLASSIC_MEMORY_FLIGHT_SECONDS = 0.42;
+export const CLASSIC_EXPLORE_MOTION = Object.freeze({
+  chargeEnd: 0.58,
+  strikeEnd: 1,
 });
 
 const COLORS = Object.freeze({
@@ -117,6 +126,15 @@ export function projectWorld(point) {
   };
 }
 
+export function classicViewportCueScale(clientWidth = LOGICAL_WIDTH) {
+  const width = Number.isFinite(clientWidth) && clientWidth > 0 ? clientWidth : LOGICAL_WIDTH;
+  return mix(1, CLASSIC_COMPACT_CUE_SCALE, clamp((560 - width) / 240, 0, 1));
+}
+
+function canvasCueScale(ctx) {
+  return classicViewportCueScale(ctx?.canvas?.clientWidth);
+}
+
 export function classicPlayerGroundingPlan(state) {
   const point = projectWorld(state.player);
   return Object.freeze({
@@ -172,33 +190,199 @@ function vector(from, to) {
   return { x: dx / length, y: dy / length, length };
 }
 
-export function classicCoreExitCuePlan(state) {
-  const boss = projectWorld(state.boss);
-  const player = projectWorld(state.player);
-  const away = vector(boss, player);
-  const direction = away.length > 1 ? away : { x: 0, y: 1, length: 1 };
+function rotateUnit(direction, radians) {
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  return {
+    x: direction.x * cosine - direction.y * sine,
+    y: direction.x * sine + direction.y * cosine,
+  };
+}
+
+function rayCircleExitDistance(origin, direction, center, radius) {
+  const x = origin.x - center.x;
+  const y = origin.y - center.y;
+  const projection = x * direction.x + y * direction.y;
+  const discriminant = projection ** 2 - (x ** 2 + y ** 2 - radius ** 2);
+  if (discriminant < 0) return null;
+  const distance = -projection + Math.sqrt(discriminant);
+  return distance > 0 ? distance : null;
+}
+
+function rayArenaExitDistance(origin, direction) {
+  const radiusX = CONFIG.arenaRadiusX - CONFIG.playerRadius;
+  const radiusY = CONFIG.arenaRadiusY - CONFIG.playerRadius;
+  const a = (direction.x / radiusX) ** 2 + (direction.y / radiusY) ** 2;
+  const b = 2 * (
+    origin.x * direction.x / radiusX ** 2
+    + origin.y * direction.y / radiusY ** 2
+  );
+  const c = (origin.x / radiusX) ** 2 + (origin.y / radiusY) ** 2 - 1;
+  const discriminant = b ** 2 - 4 * a * c;
+  if (discriminant < 0) return null;
+  const distance = (-b + Math.sqrt(discriminant)) / (2 * a);
+  return distance > 0 ? distance : null;
+}
+
+function pointSegmentDistance(point, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const denominator = dx ** 2 + dy ** 2;
+  const amount = denominator > 0
+    ? clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / denominator, 0, 1)
+    : 0;
+  return Math.hypot(
+    point.x - (start.x + dx * amount),
+    point.y - (start.y + dy * amount),
+  );
+}
+
+function segmentDistance(a, b, c, d) {
+  const rx = b.x - a.x;
+  const ry = b.y - a.y;
+  const sx = d.x - c.x;
+  const sy = d.y - c.y;
+  const denominator = rx * sy - ry * sx;
+  if (Math.abs(denominator) > 1e-9) {
+    const qx = c.x - a.x;
+    const qy = c.y - a.y;
+    const t = (qx * sy - qy * sx) / denominator;
+    const u = (qx * ry - qy * rx) / denominator;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return 0;
+  }
+  return Math.min(
+    pointSegmentDistance(a, c, d),
+    pointSegmentDistance(b, c, d),
+    pointSegmentDistance(c, a, b),
+    pointSegmentDistance(d, a, b),
+  );
+}
+
+export function classicCoreExitCuePlan(state, now = 0) {
+  const bossWorld = state.boss || { x: CONFIG.bossX, y: CONFIG.bossY };
+  const playerWorld = state.player || { x: CONFIG.playerStartX, y: CONFIG.playerStartY };
+  const boss = projectWorld(bossWorld);
+  const player = projectWorld(playerWorld);
+  const worldAway = vector(bossWorld, playerWorld);
+  const baseDirection = worldAway.length > 1
+    ? { x: worldAway.x, y: worldAway.y }
+    : { x: 0, y: 1 };
+  const motion = classicBossMotionPlan(state, now);
+  const driverSegment = Object.freeze({
+    start: Object.freeze({ ...motion.shoulder }),
+    end: Object.freeze({ ...motion.target }),
+  });
   const shockRadiusX = CONFIG.armorShockRadius * VIEW.scaleX;
   const shockRadiusY = CONFIG.armorShockRadius * VIEW.scaleY;
-  const edgeDistance = 1 / Math.sqrt(
-    (direction.x / shockRadiusX) ** 2 + (direction.y / shockRadiusY) ** 2,
-  );
-  const arrowStart = {
-    x: player.x + direction.x * 27,
-    y: player.y + direction.y * 22,
-  };
-  const arrowEnd = {
-    x: boss.x + direction.x * (edgeDistance + 28),
-    y: boss.y + direction.y * (edgeDistance + 28),
-  };
+  const angles = [0, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2];
+  const candidates = angles.map((angle, index) => {
+    const worldDirection = rotateUnit(baseDirection, angle);
+    const shockExit = rayCircleExitDistance(
+      playerWorld,
+      worldDirection,
+      bossWorld,
+      CONFIG.armorShockRadius,
+    );
+    const arenaExit = rayArenaExitDistance(playerWorld, worldDirection);
+    if (shockExit == null || arenaExit == null || arenaExit - shockExit <= 1) return null;
+    const outset = Math.min(28, (arenaExit - shockExit) * 0.78);
+    const startDistance = Math.min(27, shockExit * 0.34);
+    const startWorld = {
+      x: playerWorld.x + worldDirection.x * startDistance,
+      y: playerWorld.y + worldDirection.y * startDistance,
+    };
+    const boundaryWorld = {
+      x: playerWorld.x + worldDirection.x * shockExit,
+      y: playerWorld.y + worldDirection.y * shockExit,
+    };
+    const endWorld = {
+      x: boundaryWorld.x + worldDirection.x * outset,
+      y: boundaryWorld.y + worldDirection.y * outset,
+    };
+    const arrowStart = projectWorld(startWorld);
+    const boundary = projectWorld(boundaryWorld);
+    const arrowEnd = projectWorld(endWorld);
+    const screenDirection = vector(arrowStart, arrowEnd);
+    const clearance = segmentDistance(
+      arrowStart,
+      arrowEnd,
+      driverSegment.start,
+      driverSegment.end,
+    );
+    return Object.freeze({
+      index,
+      angle,
+      worldDirection: Object.freeze(worldDirection),
+      direction: Object.freeze({ x: screenDirection.x, y: screenDirection.y }),
+      arrowStart: Object.freeze(arrowStart),
+      boundary: Object.freeze(boundary),
+      arrowEnd: Object.freeze(arrowEnd),
+      startWorld: Object.freeze(startWorld),
+      boundaryWorld: Object.freeze(boundaryWorld),
+      endWorld: Object.freeze(endWorld),
+      clearance,
+      outset,
+    });
+  }).filter(Boolean);
+  const selected = candidates.reduce((best, candidate) => (
+    !best || candidate.clearance > best.clearance + 1e-9 ? candidate : best
+  ), null);
+  const fallbackDirection = vector(boss, player);
+  const fallback = Object.freeze({
+    index: -1,
+    angle: 0,
+    worldDirection: Object.freeze(baseDirection),
+    direction: Object.freeze({ x: fallbackDirection.x, y: fallbackDirection.y }),
+    arrowStart: Object.freeze({ ...player }),
+    boundary: Object.freeze({ ...player }),
+    arrowEnd: Object.freeze({ ...player }),
+    startWorld: Object.freeze({ ...playerWorld }),
+    boundaryWorld: Object.freeze({ ...playerWorld }),
+    endWorld: Object.freeze({ ...playerWorld }),
+    clearance: 0,
+    outset: 0,
+  });
+  const choice = selected || fallback;
   return Object.freeze({
     boss: Object.freeze(boss),
     player: Object.freeze(player),
-    direction: Object.freeze({ x: direction.x, y: direction.y }),
-    normal: Object.freeze({ x: -direction.y, y: direction.x }),
-    arrowStart: Object.freeze(arrowStart),
-    arrowEnd: Object.freeze(arrowEnd),
+    direction: choice.direction,
+    normal: Object.freeze({ x: -choice.direction.y, y: choice.direction.x }),
+    arrowStart: choice.arrowStart,
+    boundary: choice.boundary,
+    arrowEnd: choice.arrowEnd,
+    startWorld: choice.startWorld,
+    boundaryWorld: choice.boundaryWorld,
+    endWorld: choice.endWorld,
+    candidateIndex: choice.index,
+    candidateAngle: choice.angle,
+    candidateCount: candidates.length,
+    driverClearance: choice.clearance,
+    driverSegment,
     shockRadiusX,
     shockRadiusY,
+  });
+}
+
+export function classicCorePressureZonePlan(state) {
+  const opportunity = classicCoreOpportunityPlan(state);
+  if (!opportunity.warning) {
+    return Object.freeze({ active: false, hits: opportunity.hits, urgent: false });
+  }
+  const exit = classicCoreExitCuePlan(state);
+  return Object.freeze({
+    active: true,
+    hits: opportunity.hits,
+    urgent: opportunity.urgent,
+    pressure: opportunity.closurePressure,
+    center: exit.boss,
+    radiusX: exit.shockRadiusX,
+    radiusY: exit.shockRadiusY,
+    direction: exit.direction,
+    normal: exit.normal,
+    boundary: exit.boundary,
+    safeNotch: exit.boundary,
+    fillAlpha: opportunity.urgent ? 0.24 : 0.14,
   });
 }
 
@@ -346,16 +530,93 @@ function phaseProgress(remaining, duration) {
   return clamp(1 - (Number.isFinite(remaining) ? remaining : duration) / duration, 0, 1);
 }
 
+export function classicExploreCuePlan(state, clientWidth = LOGICAL_WIDTH) {
+  const memoryCount = Array.isArray(state?.memory) ? state.memory.length : 0;
+  const active = state?.round === 1
+    && state?.phase === PHASE.EXPLORE
+    && Boolean(state?.explore)
+    && memoryCount < 3;
+  if (!active) return Object.freeze({ active: false, sampleNumber: 0 });
+  const cueScale = classicViewportCueScale(clientWidth);
+  const center = projectWorld({ x: state.explore.lineX, y: 0 });
+  const half = CONFIG.exploreLaneHalfWidth * VIEW.scaleX;
+  const player = projectWorld(state.player || { x: 0, y: 0 });
+  const y = clamp(player.y + 24, VIEW.centerY - 136, VIEW.centerY + 160);
+  const clearance = 19 * cueScale;
+  const reach = 31 * cueScale;
+  const makeChevron = (direction) => {
+    const laneEdge = center.x + direction * half;
+    const inner = { x: laneEdge + direction * clearance, y };
+    const tip = { x: inner.x + direction * reach, y };
+    return Object.freeze({
+      direction,
+      laneEdge,
+      inner: Object.freeze(inner),
+      tip: Object.freeze(tip),
+      wingTop: Object.freeze({ x: inner.x, y: y - 15 * cueScale }),
+      wingBottom: Object.freeze({ x: inner.x, y: y + 15 * cueScale }),
+    });
+  };
+  return Object.freeze({
+    active: true,
+    fixed: true,
+    sampleNumber: memoryCount + 1,
+    cueScale,
+    center: Object.freeze(center),
+    half,
+    left: makeChevron(-1),
+    right: makeChevron(1),
+    hint: Object.freeze({ x: center.x, y: Math.min(620, y + 58 * cueScale) }),
+  });
+}
+
+export function classicTrackingTracePlan(state) {
+  const firstRunSampling = state.round === 1
+    && Array.isArray(state.memory)
+    && state.memory.length < 3
+    && !state.lock;
+  if (firstRunSampling && (state.phase === PHASE.ENGAGE || state.phase === PHASE.EXPLORE_RECOVER)) {
+    return Object.freeze({
+      active: true,
+      fixed: false,
+      sampleNumber: state.memory.length + 1,
+      target: Object.freeze(projectWorld(state.player || {
+        x: CONFIG.playerStartX,
+        y: CONFIG.playerStartY,
+      })),
+    });
+  }
+  if (firstRunSampling && state.phase === PHASE.EXPLORE && Number.isFinite(state.explore?.lineX)) {
+    return Object.freeze({
+      active: true,
+      fixed: true,
+      sampleNumber: state.memory.length + 1,
+      target: Object.freeze(projectWorld({ x: state.explore.lineX, y: 0 })),
+    });
+  }
+  return Object.freeze({ active: false, fixed: false, sampleNumber: 0, target: null });
+}
+
 export function classicBossMotionPlan(state, now = 0) {
   const boss = state.boss || { x: CONFIG.bossX, y: CONFIG.bossY };
   const base = projectWorld(boss);
   const hasLock = Boolean(state.lock?.zone);
-  const target = hasLock
-    ? projectWorld(state.lock.zone)
-    : projectWorld({
-        x: boss.x + (state.predictedSide === "left" ? -154 : 154),
-        y: boss.y + 116,
-      });
+  const player = state.player || { x: CONFIG.playerStartX, y: CONFIG.playerStartY };
+  const trackingTrace = classicTrackingTracePlan(state);
+  const trackingPlayer = state.phase === PHASE.ENGAGE
+    || (trackingTrace.active && !trackingTrace.fixed);
+  const fixedExploreLane = state.phase === PHASE.EXPLORE && Number.isFinite(state.explore?.lineX);
+  const targetWorld = hasLock
+    ? state.lock.zone
+    : trackingPlayer
+      ? { x: player.x, y: player.y }
+      : fixedExploreLane
+        ? { x: state.explore.lineX, y: 0 }
+        : {
+            x: boss.x + (state.predictedSide === "left" ? -154 : 154),
+            y: boss.y + 116,
+          };
+  const target = projectWorld(targetWorld);
   const direction = target.x >= base.x ? 1 : -1;
   const timing = timingForRound(Number.isFinite(state.round) ? state.round : 1);
   let stage = "idle";
@@ -370,30 +631,43 @@ export function classicBossMotionPlan(state, now = 0) {
 
   switch (state.phase) {
     case PHASE.ENGAGE: {
-      stage = "engage";
+      stage = "tracking";
       const settle = phaseProgress(state.phaseTime, CONFIG.engageDuration);
       bodyOffsetY = (1 - easeOutCubic(settle)) * -7;
-      driverRetract = 86;
+      driverRetract = mix(72, 86, easeInOutCubic(settle));
+      cableTension = settle;
       break;
     }
     case PHASE.EXPLORE: {
       stage = "explore";
       const progress = phaseProgress(state.phaseTime, timing.explore);
-      const load = clamp(progress / 0.58, 0, 1);
-      const release = clamp((progress - 0.58) / 0.42, 0, 1);
+      const load = clamp(progress / CLASSIC_EXPLORE_MOTION.chargeEnd, 0, 1);
+      const release = clamp(
+        (progress - CLASSIC_EXPLORE_MOTION.chargeEnd)
+          / (CLASSIC_EXPLORE_MOTION.strikeEnd - CLASSIC_EXPLORE_MOTION.chargeEnd),
+        0,
+        1,
+      );
       bodyOffsetY = mix(0, 7, easeInOutCubic(load)) - Math.sin(release * Math.PI) * 5;
       bodyTilt = direction * Math.sin(release * Math.PI) * 0.035;
-      braceLoad = progress < 0.58 ? easeInOutCubic(load) : 1 - easeOutCubic(release);
-      driverRetract = 88;
+      braceLoad = progress < CLASSIC_EXPLORE_MOTION.chargeEnd
+        ? easeInOutCubic(load)
+        : 1 - easeOutCubic(release);
+      driverRetract = progress < CLASSIC_EXPLORE_MOTION.chargeEnd
+        ? mix(88, 116, easeInOutCubic(load))
+        : mix(116, 8, easeInOutCubic(release));
+      strikeProgress = progress;
+      cableTension = progress < CLASSIC_EXPLORE_MOTION.chargeEnd ? load : 1;
       break;
     }
-    case PHASE.EXPLORE_RECOVER:
-      stage = "recover";
-      bodyOffsetY = Math.sin(
-        phaseProgress(state.phaseTime, CONFIG.exploreRecoverDuration) * Math.PI,
-      ) * -3;
-      driverRetract = 86;
+    case PHASE.EXPLORE_RECOVER: {
+      const progress = phaseProgress(state.phaseTime, CONFIG.exploreRecoverDuration);
+      stage = trackingPlayer ? "tracking-recover" : "recover";
+      bodyOffsetY = Math.sin(progress * Math.PI) * -3;
+      driverRetract = trackingPlayer ? mix(86, 72, easeOutCubic(progress)) : 86;
+      cableTension = trackingPlayer ? mix(0.2, 0.7, progress) : 0;
       break;
+    }
     case PHASE.COMBINE: {
       stage = "combine";
       const progress = phaseProgress(state.phaseTime, CONFIG.combineDuration);
@@ -475,12 +749,13 @@ export function classicBossMotionPlan(state, now = 0) {
       break;
   }
 
+  const coreReaction = classicCoreReactionPlan(state);
   const impact = state.visual?.impact;
   if (impact?.tone === "core" || impact?.tone === "armor") {
     const duration = impact.tone === "core" ? 0.3 : 0.24;
     const age = clamp(duration - impact.remaining, 0, duration);
     const wave = impact.tone === "core"
-      ? classicCoreReactionPlan(state).bodyKick
+      ? coreReaction.bodyKick
       : Math.exp(-15 * age) * Math.sin(age * 42);
     const player = projectWorld(state.player || { x: 0, y: 0 });
     const push = vector(player, base);
@@ -505,7 +780,13 @@ export function classicBossMotionPlan(state, now = 0) {
     x: base.x + direction * 58,
     y: base.y - 112,
   };
-  const shoulder = hasLock ? fixedShoulder : bodyShoulder;
+  const fixedAxis = vector(fixedShoulder, target);
+  const shoulder = hasLock
+    ? {
+        x: fixedShoulder.x - fixedAxis.x * coreReaction.driverShoulderKick,
+        y: fixedShoulder.y - fixedAxis.y * coreReaction.driverShoulderKick,
+      }
+    : bodyShoulder;
   const axis = vector(shoulder, target);
   const driverHead = contact
     ? classicDriverContact(target)
@@ -528,6 +809,10 @@ export function classicBossMotionPlan(state, now = 0) {
     braceLoad,
     cableTension,
     contact,
+    trackingPlayer,
+    fixedExploreLane,
+    aimClamped: fixedExploreLane || state.phase === PHASE.COMBINE || hasLock,
+    driverShoulderKick: coreReaction.driverShoulderKick,
     axisAngle: Math.atan2(axis.y, axis.x),
     now,
   });
@@ -555,24 +840,24 @@ export function classicMemoryMotionPlan(state, index, filledLength = state.memor
     return Object.freeze({ active: false, inserting: false, insertion: 0, alignment: 0 });
   }
   let insertionAge = Infinity;
-  let insertionDuration = 0.16;
   if (state.visual?.escapeMarker && index === (state.memory?.length || 0) - 1) {
-    if (state.phase === PHASE.EXPLORE_RECOVER) {
-      insertionAge = Math.max(0, CONFIG.exploreRecoverDuration - (state.phaseTime || 0));
-    } else if (state.phase === PHASE.COMBINE) {
-      insertionAge = Math.max(0, CONFIG.combineDuration - (state.phaseTime || 0));
-      insertionDuration = 0.24;
-    }
+    const markerDuration = Number.isFinite(state.visual.escapeMarker.duration)
+      ? state.visual.escapeMarker.duration
+      : 0.72;
+    const markerRemaining = Number.isFinite(state.visual.escapeMarker.remaining)
+      ? state.visual.escapeMarker.remaining
+      : markerDuration;
+    insertionAge = Math.max(0, markerDuration - markerRemaining);
   }
-  const inserting = insertionAge <= insertionDuration;
+  const inserting = insertionAge <= CLASSIC_MEMORY_FLIGHT_SECONDS;
   const insertion = inserting
-    ? easeInOutCubic(clamp(insertionAge / insertionDuration, 0, 1))
+    ? easeInOutCubic(clamp(insertionAge / CLASSIC_MEMORY_FLIGHT_SECONDS, 0, 1))
     : 1;
   const combineAge = state.phase === PHASE.COMBINE
     ? Math.max(0, CONFIG.combineDuration - (state.phaseTime || 0))
     : 0;
   const alignment = state.phase === PHASE.COMBINE
-    ? easeInOutCubic(clamp((combineAge - 0.24) / 0.25, 0, 1))
+    ? easeInOutCubic(clamp((combineAge - CLASSIC_MEMORY_FLIGHT_SECONDS) / 0.11, 0, 1))
     : state.lock ? 1 : 0;
   return Object.freeze({ active, inserting, insertion, alignment });
 }
@@ -602,6 +887,11 @@ export function classicCoreVisualPlan(state, now = 0) {
     : 0;
   const reaction = classicCoreReactionPlan(state);
   const opportunity = classicCoreOpportunityPlan(state);
+  const hitCount = clamp(
+    Math.floor(Number.isFinite(state.coreHitsThisWindow) ? state.coreHitsThisWindow : 0),
+    0,
+    3,
+  );
   const hitAge = reaction.hitAge;
   const hitCompression = reaction.faceCompression;
   const pulse = 1 + Math.sin(now * 13) * 0.035;
@@ -612,10 +902,17 @@ export function classicCoreVisualPlan(state, now = 0) {
     shutterAge,
     exposure,
     hitAge,
+    hitCount,
+    crackCount: hitCount,
+    contactMarkAlpha: reaction.directHit
+      ? clamp(1 - hitAge / (CLASSIC_CORE_CONTACT_MARK_MS / 1000), 0, 1)
+      : 0,
     hitCompression,
     finsKick: reaction.finsKick,
     radius: Math.max(0, 22 * exposure * pulse * (1 - hitCompression * 0.28)),
     shutterKick: reaction.shutterKick * 0.11,
+    shellKick: reaction.shellKick,
+    driverShoulderKick: reaction.driverShoulderKick,
     closurePressure: opportunity.closurePressure,
     reflectionAlpha: open ? clamp(0.12 + exposure * 0.24, 0, 0.38) : 0,
   });
@@ -647,6 +944,15 @@ export function classicBladeContactPlan(state, now = 0, { locomotionLean = 0 } =
   const targetAngle = Math.atan2(target.y - hand.y, target.x - hand.x);
   const contactLength = Math.hypot(target.x - hand.x, target.y - hand.y);
   const motion = classicAttackVisualPlan(state);
+  const openCoreMiss = Boolean(state.boss?.coreOpen)
+    && motion.active
+    && state.visual.attack?.hit !== true;
+  const coreSurfaceRadius = state.boss?.coreOpen
+    ? classicCoreVisualPlan(state, now).radius
+    : 0;
+  const missLength = openCoreMiss
+    ? clamp(contactLength - coreSurfaceRadius - CLASSIC_CORE_MISS_GAP, 0, 54)
+    : null;
   const guardVertical = target.y < hand.y ? -1 : 1;
   const guardAngle = Math.atan2(guardVertical, swingSide);
   const angle = motion.active
@@ -654,9 +960,15 @@ export function classicBladeContactPlan(state, now = 0, { locomotionLean = 0 } =
     : guardAngle;
   const length = motion.contact
     ? contactLength
+    : openCoreMiss
+      ? missLength
     : state.visual.attack?.armor
       ? 43
       : motion.active ? 54 : 48;
+  const tip = {
+    x: hand.x + Math.cos(angle) * length,
+    y: hand.y + Math.sin(angle) * length,
+  };
   return {
     hand,
     target,
@@ -671,10 +983,12 @@ export function classicBladeContactPlan(state, now = 0, { locomotionLean = 0 } =
     locomotionLean,
     pose,
     motion,
-    tip: {
-      x: hand.x + Math.cos(angle) * length,
-      y: hand.y + Math.sin(angle) * length,
-    },
+    openCoreMiss,
+    coreSurfaceRadius,
+    missSurfaceGap: openCoreMiss
+      ? Math.hypot(tip.x - target.x, tip.y - target.y) - coreSurfaceRadius
+      : null,
+    tip,
   };
 }
 
@@ -856,8 +1170,21 @@ function drawExploreWarning(ctx, state) {
   const urgency = 1 - clamp(state.phaseTime / 0.55, 0, 1);
   const top = VIEW.centerY - 210;
   const bottom = VIEW.centerY + 208;
+  const scorch = { x: center.x, y: VIEW.centerY };
 
   ctx.save();
+  ctx.fillStyle = "rgba(14,10,8,.82)";
+  ellipse(ctx, scorch, half * 0.46, 13);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(197,92,50,.9)";
+  ctx.lineWidth = 3;
+  ellipse(ctx, scorch, half * 0.62, 17);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(243,187,98,.78)";
+  for (const offset of [-0.56, 0, 0.56]) {
+    ellipse(ctx, { x: scorch.x + half * offset, y: scorch.y }, 4, 2.5);
+    ctx.fill();
+  }
   ctx.globalAlpha = 0.72 + urgency * 0.28;
   ctx.fillStyle = "rgba(124,46,29,.16)";
   ctx.fillRect(center.x - half, top, half * 2, bottom - top);
@@ -876,6 +1203,55 @@ function drawExploreWarning(ctx, state) {
     [{ x: center.x - half - 8, y: VIEW.centerY + gap }, { x: center.x + half + 8, y: VIEW.centerY + gap }],
   ]);
   ctx.stroke();
+
+  const cue = classicExploreCuePlan(state, ctx?.canvas?.clientWidth);
+  if (cue.active) {
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const chevron of [cue.left, cue.right]) {
+      ctx.strokeStyle = "rgba(8,7,6,.94)";
+      ctx.lineWidth = 12 * cue.cueScale;
+      lines(ctx, [[chevron.wingTop, chevron.tip], [chevron.wingBottom, chevron.tip]]);
+      ctx.stroke();
+      ctx.strokeStyle = COLORS.enamelLight;
+      ctx.lineWidth = 5.5 * cue.cueScale;
+      lines(ctx, [[chevron.wingTop, chevron.tip], [chevron.wingBottom, chevron.tip]]);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawTrackingTrace(ctx, state, now) {
+  const trace = classicTrackingTracePlan(state);
+  if (!trace.active || !trace.target) return;
+  const base = projectWorld(state.boss || { x: CONFIG.bossX, y: CONFIG.bossY });
+  const direction = trace.target.x >= base.x ? 1 : -1;
+  const sight = { x: base.x + direction * 23, y: base.y - 145 };
+  const pulse = trace.fixed ? 0.9 : 0.46 + Math.sin(now * 14) * 0.1;
+  ctx.save();
+  ctx.globalAlpha = pulse;
+  ctx.strokeStyle = "rgba(8,7,6,.92)";
+  ctx.lineWidth = trace.fixed ? 8 : 5;
+  if (!trace.fixed) ctx.setLineDash([9, 12]);
+  line(ctx, sight, trace.target);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = trace.fixed ? COLORS.rustBright : "rgba(197,92,50,.82)";
+  ctx.lineWidth = trace.fixed ? 3.5 : 2;
+  line(ctx, sight, trace.target);
+  ctx.stroke();
+  const clampWidth = trace.fixed ? 27 : 22;
+  ctx.strokeStyle = trace.fixed ? COLORS.porcelainLight : COLORS.heat;
+  ctx.lineWidth = trace.fixed ? 5 : 2;
+  lines(ctx, [
+    [{ x: trace.target.x - clampWidth, y: trace.target.y - 12 }, { x: trace.target.x - clampWidth, y: trace.target.y + 12 }],
+    [{ x: trace.target.x + clampWidth, y: trace.target.y - 12 }, { x: trace.target.x + clampWidth, y: trace.target.y + 12 }],
+  ]);
+  ctx.stroke();
+  ctx.fillStyle = trace.fixed ? COLORS.rustBright : COLORS.heat;
+  ellipse(ctx, sight, trace.fixed ? 9 : 15, trace.fixed ? 4 : 7);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -960,6 +1336,50 @@ function drawDashSkid(ctx, state) {
   ctx.restore();
 }
 
+export function classicMemoryGroundTracePlan(traces = []) {
+  return Object.freeze(traces.slice(-3).map((trace, index) => Object.freeze({
+    index,
+    side: trace.side,
+    point: Object.freeze(projectWorld(trace)),
+  })));
+}
+
+function drawMemoryGroundTraces(ctx, state, traces, now) {
+  const plan = classicMemoryGroundTracePlan(traces);
+  if (plan.length === 0) return;
+  const bossMotion = classicBossMotionPlan(state, now);
+  const connecting = state.phase === PHASE.COMBINE || Boolean(state.lock);
+  const rackSign = classicMemoryRackSidePlan(state);
+  ctx.save();
+  for (const trace of plan) {
+    const direction = trace.side === "left" ? -1 : 1;
+    const point = trace.point;
+    const socket = classicMemorySocketPlan(bossMotion.bodyBase, trace.index, rackSign);
+    ctx.globalAlpha = 0.72;
+    ctx.strokeStyle = "rgba(8,7,6,.82)";
+    ctx.lineWidth = 7;
+    line(ctx, { x: point.x - direction * 12, y: point.y }, { x: point.x + direction * 16, y: point.y });
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.enamelLight;
+    ctx.lineWidth = 3;
+    line(ctx, { x: point.x - direction * 12, y: point.y }, { x: point.x + direction * 16, y: point.y });
+    ctx.stroke();
+    ctx.fillStyle = COLORS.enamel;
+    ellipse(ctx, point, 13, 5);
+    ctx.fill();
+    if (connecting) {
+      ctx.globalAlpha = 0.12 + trace.index * 0.05;
+      ctx.strokeStyle = COLORS.brassLight;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 10]);
+      line(ctx, point, socket);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  ctx.restore();
+}
+
 function drawCoreReflection(ctx, state, now) {
   const core = classicCoreVisualPlan(state, now);
   if (!core.open || core.exposure <= 0.02) return;
@@ -981,6 +1401,16 @@ function drawCoreReflection(ctx, state, now) {
   ctx.fillStyle = reflection;
   ellipse(ctx, { x: core.anchor.x, y: floor.y + 26 }, width, height);
   ctx.fill();
+  if (core.hitCount > 0) {
+    ctx.globalAlpha = 0.56 + core.hitCount * 0.12;
+    ctx.strokeStyle = core.hitCount >= 3 ? COLORS.rustBright : COLORS.porcelainLight;
+    ctx.lineWidth = 3;
+    for (let index = 0; index < core.hitCount; index += 1) {
+      const x = core.anchor.x + (index - 1) * 18;
+      line(ctx, { x: x - 8, y: floor.y + 32 }, { x: x + 7, y: floor.y + 21 });
+      ctx.stroke();
+    }
+  }
   ctx.restore();
 }
 
@@ -1078,7 +1508,7 @@ function drawMemorySlab(ctx, x, y, side, active) {
   ctx.restore();
 }
 
-function drawMemoryDirectionGlyph(ctx, plaque, side, rotation, committed) {
+function drawMemoryDirectionGlyph(ctx, plaque, side, rotation, committed, cueScale = 1) {
   const direction = side === "left" ? -1 : 1;
   const halfWidth = (CLASSIC_MEMORY_DIRECTION_GLYPH.logicalWidth - 1) / 2;
   const halfHeight = CLASSIC_MEMORY_DIRECTION_GLYPH.logicalHeight / 2;
@@ -1094,6 +1524,7 @@ function drawMemoryDirectionGlyph(ctx, plaque, side, rotation, committed) {
   ctx.save();
   ctx.translate(plaque.x, plaque.y);
   ctx.rotate(rotation);
+  ctx.scale(cueScale, cueScale);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.strokeStyle = "rgba(12,9,7,.92)";
@@ -1121,20 +1552,40 @@ function drawMemoryDirectionGlyph(ctx, plaque, side, rotation, committed) {
   ctx.restore();
 }
 
+export function classicMemorySocketPlan(base, index, rackSign = -1) {
+  const offsets = [
+    { x: -94, y: -98 },
+    { x: -108, y: -59 },
+    { x: -98, y: -20 },
+  ];
+  const offset = offsets[clamp(Math.floor(index), 0, offsets.length - 1)];
+  const side = rackSign < 0 ? -1 : rackSign > 0 ? 1 : 0;
+  return Object.freeze({ x: base.x + Math.abs(offset.x) * side, y: base.y + offset.y });
+}
+
+export function classicMemoryRackSidePlan(state) {
+  if (state?.predictedSide !== "left") return -1;
+  if (state.phase !== PHASE.COMBINE) return 1;
+  const progress = phaseProgress(state.phaseTime, CONFIG.combineDuration);
+  return mix(-1, 1, easeInOutCubic(progress));
+}
+
 function drawMemoryRack(ctx, state, base, now, art) {
+  const cueScale = canvasCueScale(ctx);
+  const rackSign = classicMemoryRackSidePlan(state);
+  const sockets = [0, 1, 2].map((index) => classicMemorySocketPlan(base, index, rackSign));
   ctx.save();
   ctx.strokeStyle = COLORS.iron;
-  ctx.lineWidth = 8;
-  line(ctx, { x: base.x - 68, y: base.y - 133 }, { x: base.x + 68, y: base.y - 133 });
+  ctx.lineWidth = 11;
+  lines(ctx, [[sockets[0], sockets[1]], [sockets[1], sockets[2]]]);
   ctx.stroke();
   ctx.strokeStyle = COLORS.brass;
   ctx.lineWidth = 2;
-  line(ctx, { x: base.x - 68, y: base.y - 139 }, { x: base.x + 68, y: base.y - 139 });
+  lines(ctx, [[sockets[0], sockets[1]], [sockets[1], sockets[2]]]);
   ctx.stroke();
 
   // The state machine immediately keeps only the real opposite escape after an
-  // OUTSMART. The still-locked three slabs remain on the boss for this one
-  // physical aftermath, so the empty impact visibly follows from its belief.
+  // OUTSMART. The still-locked slabs remain seated for the physical aftermath.
   const lockedAfterimage =
     (state.phase === PHASE.CORE_OPEN || state.phase === PHASE.ROUND_CLEAR) &&
     state.lock?.side;
@@ -1142,103 +1593,143 @@ function drawMemoryRack(ctx, state, base, now, art) {
     ? [state.lock.side, state.lock.side, state.lock.side]
     : state.memory.slice(-3);
   const combining = state.phase === PHASE.COMBINE || Boolean(state.lock);
+
   for (let index = 0; index < 3; index += 1) {
     const side = filled[index];
-    const x = base.x + (index - 1) * 44;
-    const memoryMotion = classicMemoryMotionPlan(state, index, filled.length);
+    const slot = sockets[index];
+    const memoryMotion = lockedAfterimage
+      ? { inserting: false, insertion: 1, alignment: 1 }
+      : classicMemoryMotionPlan(state, index, filled.length);
     const wobble = state.phase === PHASE.COMBINE && side
       ? Math.sin(now * 18 + index) * 1.5 * (1 - memoryMotion.alignment)
       : 0;
-    ctx.fillStyle = "rgba(16,13,11,.58)";
-    roundedRect(ctx, x - 22, base.y - 171, 44, 54, 5);
-    ctx.fill();
-    ctx.strokeStyle = COLORS.ironEdge;
-    ctx.lineWidth = 1;
+
+    if (side) {
+      ctx.fillStyle = "rgba(12,10,9,.9)";
+      ellipse(ctx, slot, 20, 15);
+      ctx.fill();
+    }
+    ctx.strokeStyle = side ? COLORS.brass : COLORS.ironEdge;
+    ctx.lineWidth = side ? 3 : 2.5;
+    ctx.beginPath();
+    ctx.arc(slot.x, slot.y, side ? 20 : 15, -Math.PI * 0.68, Math.PI * 0.68);
     ctx.stroke();
     if (side) {
-      const slot = {
-        x: mix(x, base.x + (index - 1) * 40, memoryMotion.alignment),
-        y: base.y - 143 - memoryMotion.alignment * (index === 1 ? 5 : 1),
-      };
-      let plaque = { x: slot.x + wobble, y: slot.y };
-      let plaqueScale = 0.98;
-      let plaqueScaleY = 1.02;
-      let plaqueRotation = side === "left" ? -0.13 : 0.13;
-      if (memoryMotion.inserting && state.visual.escapeMarker) {
-        const start = projectWorld(state.visual.escapeMarker);
-        plaque = pointAlong(start, slot, memoryMotion.insertion);
-        plaque.y -= Math.sin(memoryMotion.insertion * Math.PI) * 48;
-        plaque.x += (side === "left" ? -1 : 1)
-          * Math.sin(memoryMotion.insertion * Math.PI)
-          * 54;
-        plaqueScale = mix(0.5, 0.98, memoryMotion.insertion);
-        plaqueScaleY = mix(0.56, 1.02, memoryMotion.insertion);
-        plaqueRotation = mix(
-          side === "left" ? -0.48 : 0.48,
-          side === "left" ? -0.13 : 0.13,
-          memoryMotion.insertion,
-        );
-        ctx.save();
-        ctx.globalAlpha = 0.2 + Math.sin(memoryMotion.insertion * Math.PI) * 0.32;
-        ctx.fillStyle = COLORS.enamel;
-        ellipse(ctx, plaque, 25, 14);
-        ctx.fill();
-        ctx.globalAlpha = (1 - memoryMotion.insertion) * 0.76;
-        ctx.strokeStyle = "rgba(7,6,5,.82)";
-        ctx.lineWidth = 9;
-        line(ctx, start, plaque);
-        ctx.stroke();
-        ctx.strokeStyle = COLORS.enamelLight;
-        ctx.lineWidth = 4;
-        line(ctx, start, plaque);
-        ctx.stroke();
-        ctx.restore();
-      }
-      const usedArt = drawImagePart(
-        ctx,
-        art,
-        art?.images?.relics,
-        CLASSIC_RELIC_PARTS.memory,
-        plaque,
-        {
-          anchor: "root",
-          rotation: plaqueRotation,
-          scaleX: plaqueScale,
-          scaleY: plaqueScaleY,
-          alpha: combining ? 1 : 0.9,
-        },
+      ctx.strokeStyle = "rgba(185,171,145,.3)";
+      ctx.lineWidth = 1.5;
+      ellipse(ctx, slot, 14, 9);
+      ctx.stroke();
+    }
+
+    if (!side) continue;
+    let plaque = { x: slot.x + wobble, y: slot.y };
+    let plaqueScale = 0.78;
+    let plaqueScaleY = 0.82;
+    let plaqueRotation = side === "left" ? -0.13 : 0.13;
+    if (memoryMotion.inserting && state.visual.escapeMarker) {
+      const start = projectWorld(state.visual.escapeMarker);
+      plaque = pointAlong(start, slot, memoryMotion.insertion);
+      plaque.y -= Math.sin(memoryMotion.insertion * Math.PI) * 42;
+      plaque.x += (side === "left" ? -1 : 1)
+        * Math.sin(memoryMotion.insertion * Math.PI)
+        * 38;
+      plaqueScale = mix(0.42, 0.78, memoryMotion.insertion);
+      plaqueScaleY = mix(0.48, 0.82, memoryMotion.insertion);
+      plaqueRotation = mix(
+        side === "left" ? -0.48 : 0.48,
+        side === "left" ? -0.13 : 0.13,
+        memoryMotion.insertion,
       );
-      if (!usedArt) drawMemorySlab(ctx, plaque.x, plaque.y, side, combining);
-      drawMemoryDirectionGlyph(ctx, plaque, side, plaqueRotation, combining);
-      if (memoryMotion.inserting && memoryMotion.insertion >= 0.7) {
-        const settle = clamp((memoryMotion.insertion - 0.7) / 0.3, 0, 1);
-        ctx.save();
-        ctx.globalAlpha = 1 - settle;
-        ctx.strokeStyle = COLORS.brassLight;
-        ctx.lineWidth = 4 - settle * 2;
-        ellipse(ctx, slot, 14 + settle * 18, 8 + settle * 8);
-        ctx.stroke();
-        ctx.restore();
-      }
+      ctx.save();
+      ctx.globalAlpha = 0.24 + Math.sin(memoryMotion.insertion * Math.PI) * 0.38;
+      ctx.fillStyle = COLORS.enamel;
+      ellipse(ctx, plaque, 23, 12);
+      ctx.fill();
+      ctx.globalAlpha = (1 - memoryMotion.insertion) * 0.82;
+      ctx.strokeStyle = "rgba(7,6,5,.82)";
+      ctx.lineWidth = 8;
+      line(ctx, start, plaque);
+      ctx.stroke();
+      ctx.strokeStyle = COLORS.enamelLight;
+      ctx.lineWidth = 3;
+      line(ctx, start, plaque);
+      ctx.stroke();
+      ctx.restore();
+    }
+    const usedArt = drawImagePart(
+      ctx,
+      art,
+      art?.images?.relics,
+      CLASSIC_RELIC_PARTS.memory,
+      plaque,
+      {
+        anchor: "root",
+        rotation: plaqueRotation,
+        scaleX: plaqueScale,
+        scaleY: plaqueScaleY,
+        alpha: combining ? 1 : 0.92,
+      },
+    );
+    if (!usedArt) drawMemorySlab(ctx, plaque.x, plaque.y, side, combining);
+    drawMemoryDirectionGlyph(ctx, plaque, side, plaqueRotation, combining, cueScale);
+    if (memoryMotion.inserting && memoryMotion.insertion >= 0.7) {
+      const settle = clamp((memoryMotion.insertion - 0.7) / 0.3, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = 1 - settle;
+      ctx.strokeStyle = COLORS.brassLight;
+      ctx.lineWidth = 4 - settle * 2;
+      ellipse(ctx, slot, 14 + settle * 16, 8 + settle * 7);
+      ctx.stroke();
+      ctx.restore();
     }
   }
 
-  if (combining && state.predictedSide) {
-    const tension = state.phase === PHASE.COMBINE
-      ? classicMemoryMotionPlan(state, 2, filled.length).alignment
-      : 1;
-    if (tension <= 0.01) {
-      ctx.restore();
-      return;
+  const voteProgress = state.phase === PHASE.COMBINE
+    ? phaseProgress(state.phaseTime, CONFIG.combineDuration)
+    : combining ? 1 : 0;
+  const vote = classicMemoryVotePlan(state, { progress: voteProgress });
+  if (vote.active) {
+    const trackY = base.y - 145;
+    const hub = { x: base.x + vote.pull * 42, y: trackY };
+    ctx.globalAlpha = 0.42 + vote.progress * 0.58;
+    ctx.strokeStyle = "rgba(8,7,6,.94)";
+    ctx.lineWidth = 9;
+    line(ctx, { x: base.x - 52, y: trackY }, { x: base.x + 52, y: trackY });
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.brass;
+    ctx.lineWidth = 3;
+    line(ctx, { x: base.x - 52, y: trackY }, { x: base.x + 52, y: trackY });
+    ctx.stroke();
+    for (let tooth = -3; tooth <= 3; tooth += 1) {
+      const x = base.x + tooth * 15;
+      ctx.strokeStyle = Math.abs(tooth) <= vote.ratchetStep ? COLORS.brassLight : COLORS.ironEdge;
+      ctx.lineWidth = 3;
+      line(ctx, { x, y: trackY - 6 }, { x, y: trackY + 6 });
+      ctx.stroke();
     }
-    const direction = state.predictedSide === "left" ? -1 : 1;
+    for (const memoryVote of vote.votes) {
+      const socket = sockets[memoryVote.index];
+      const pawl = {
+        x: socket.x + memoryVote.direction * (18 + memoryVote.engagement * 7),
+        y: socket.y,
+      };
+      ctx.globalAlpha = 0.38 + memoryVote.engagement * 0.62;
+      ctx.strokeStyle = memoryVote.agrees ? COLORS.brassLight : COLORS.ironEdge;
+      ctx.lineWidth = memoryVote.agrees ? 4 : 2.5;
+      lines(ctx, [[socket, pawl], [pawl, hub]]);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "rgba(12,10,9,.96)";
+    ellipse(ctx, hub, 16, 13);
+    ctx.fill();
     ctx.strokeStyle = COLORS.brassLight;
-    ctx.lineWidth = mix(2, 4, tension);
-    line(
-      ctx,
-      { x: base.x, y: base.y - 119 },
-      { x: base.x + direction * 62 * tension, y: base.y - 119 + 14 * tension },
-    );
+    ctx.lineWidth = 4;
+    ellipse(ctx, hub, 16, 13);
+    ctx.stroke();
+    const crown = { x: base.x + vote.direction * 27, y: base.y - 174 };
+    ctx.lineWidth = 4;
+    line(ctx, hub, crown);
     ctx.stroke();
   }
   ctx.restore();
@@ -1332,26 +1823,26 @@ function drawAuthoredPileDriver(ctx, from, target, embedded, intensity, art) {
   const direction = vector(from, target);
   const angle = Math.atan2(direction.y, direction.x);
   const railStart = {
-    x: from.x + direction.x * 13,
-    y: from.y + direction.y * 13,
+    x: from.x + direction.x * 10,
+    y: from.y + direction.y * 10,
   };
-  const railLength = Math.max(28, direction.length - 83);
+  const railLength = Math.max(36, direction.length - 74);
 
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.driver.rail, railStart, {
     anchor: "start",
     rotation: angle,
     scaleX: railLength / 136,
-    scaleY: 0.72,
+    scaleY: 0.86,
   });
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.driver.shoulder, from, {
     anchor: "axis",
     rotation: angle,
-    scaleX: 0.6,
+    scaleX: 0.74,
   });
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.driver.head, classicDriverContact(target), {
     anchor: "contact",
     rotation: angle,
-    scaleX: 0.72,
+    scaleX: 0.86,
   });
 
   if (embedded) {
@@ -1659,6 +2150,106 @@ function drawAuthoredCoreParts(ctx, coreVisual, art) {
   return true;
 }
 
+function drawCoreDamageMarks(ctx, state, coreVisual) {
+  const core = coreVisual.anchor;
+  const crackAngles = [-2.48, -0.62, 1.48];
+  for (let index = 0; index < coreVisual.crackCount; index += 1) {
+    const angle = crackAngles[index];
+    const start = {
+      x: core.x + Math.cos(angle) * 3,
+      y: core.y + Math.sin(angle) * 3,
+    };
+    const elbow = {
+      x: core.x + Math.cos(angle + (index % 2 ? -0.22 : 0.22)) * (11 + index * 2),
+      y: core.y + Math.sin(angle + (index % 2 ? -0.22 : 0.22)) * (9 + index * 2),
+    };
+    const end = {
+      x: core.x + Math.cos(angle) * (20 + index * 3),
+      y: core.y + Math.sin(angle) * (16 + index * 3),
+    };
+    ctx.strokeStyle = "rgba(18,12,10,.94)";
+    ctx.lineWidth = 5;
+    lines(ctx, [[start, elbow], [elbow, end]]);
+    ctx.stroke();
+    ctx.strokeStyle = index === 2 ? COLORS.rustBright : COLORS.brass;
+    ctx.lineWidth = 1.8;
+    lines(ctx, [[start, elbow], [elbow, end]]);
+    ctx.stroke();
+  }
+
+  if (coreVisual.contactMarkAlpha <= 0) return;
+  const player = projectWorld(state.player || { x: 0, y: 0 });
+  const incoming = vector(player, core);
+  const start = {
+    x: core.x - incoming.x * 24,
+    y: core.y - incoming.y * 24,
+  };
+  const end = {
+    x: core.x + incoming.x * 18,
+    y: core.y + incoming.y * 18,
+  };
+  ctx.save();
+  ctx.globalAlpha = coreVisual.contactMarkAlpha;
+  ctx.strokeStyle = "rgba(15,10,8,.94)";
+  ctx.lineWidth = 9;
+  line(ctx, start, end);
+  ctx.stroke();
+  ctx.strokeStyle = COLORS.white;
+  ctx.lineWidth = 4;
+  line(ctx, start, end);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawShellDamageMarks(ctx, coreVisual, leftHinge, rightHinge, leftRotation, rightRotation) {
+  if (coreVisual.hitCount <= 0) return;
+  const marks = [
+    {
+      at: transformLocal(leftHinge, { x: -39, y: -53 }, leftRotation, 0.9),
+      rotation: leftRotation - 0.38,
+      length: 30,
+    },
+    {
+      at: transformLocal(rightHinge, { x: 36, y: -48 }, rightRotation, 0.9),
+      rotation: rightRotation + 0.42,
+      length: 34,
+    },
+    {
+      at: transformLocal(leftHinge, { x: -25, y: -89 }, leftRotation, 0.9),
+      rotation: leftRotation + 0.7,
+      length: 39,
+    },
+  ];
+
+  for (let index = 0; index < coreVisual.hitCount; index += 1) {
+    const mark = marks[index];
+    const half = mark.length / 2;
+    ctx.save();
+    ctx.translate(mark.at.x, mark.at.y);
+    ctx.rotate(mark.rotation);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(12,9,7,.94)";
+    ctx.lineWidth = 6;
+    lines(ctx, [[{ x: -half, y: -3 }, { x: -4, y: 2 }], [{ x: -4, y: 2 }, { x: 3, y: -5 }], [{ x: 3, y: -5 }, { x: half, y: 4 }]]);
+    ctx.stroke();
+    ctx.strokeStyle = index === 2 ? COLORS.rustBright : COLORS.brass;
+    ctx.lineWidth = 2;
+    lines(ctx, [[{ x: -half, y: -3 }, { x: -4, y: 2 }], [{ x: -4, y: 2 }, { x: 3, y: -5 }], [{ x: 3, y: -5 }, { x: half, y: 4 }]]);
+    ctx.stroke();
+    if (index === 2) {
+      ctx.fillStyle = "rgba(10,8,7,.96)";
+      ctx.beginPath();
+      ctx.moveTo(-7, -7);
+      ctx.lineTo(5, -3);
+      ctx.lineTo(-1, 8);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
 function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, secondaryKick = 0) {
   const image = art?.images?.boss;
   if (!image) return false;
@@ -1716,6 +2307,8 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, seconda
       ctx.stroke();
     }
 
+    drawCoreDamageMarks(ctx, state, coreVisual);
+
     if (Number.isFinite(coreVisual.hitAge) && coreVisual.hitAge <= 0.12) {
       const hitProgress = clamp(coreVisual.hitAge / 0.12, 0, 1);
       ctx.globalAlpha = 1 - hitProgress;
@@ -1734,19 +2327,22 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, seconda
         0.54 * coreVisual.exposure,
         0.72 * coreVisual.exposure
           + coreVisual.shutterKick
+          + coreVisual.shellKick
           + secondaryKick * 0.42
           - closurePressure * 0.16
           + closingTremor,
       )
     : 0.06;
+  const leftShellRotation = tilt - shellOpen;
+  const rightShellRotation = tilt + shellOpen * 0.88;
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.boss.shellLeft, leftHinge, {
     anchor: "hinge",
-    rotation: tilt - shellOpen,
+    rotation: leftShellRotation,
     scaleX: 0.9,
   });
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.boss.shellRight, rightHinge, {
     anchor: "hinge",
-    rotation: tilt + shellOpen * 0.88,
+    rotation: rightShellRotation,
     scaleX: 0.9,
   });
 
@@ -1755,6 +2351,7 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, seconda
         0.64 * coreVisual.exposure,
         0.94 * coreVisual.exposure
           + coreVisual.shutterKick * 1.35
+          + coreVisual.shellKick * 0.72
           + secondaryKick * 0.58
           - closurePressure * 0.28
           - closingTremor,
@@ -1770,6 +2367,15 @@ function drawAuthoredFurnaceBody(ctx, state, base, tilt, now, pile, art, seconda
     rotation: tilt + shutterOpen,
     scaleX: 0.72,
   });
+
+  drawShellDamageMarks(
+    ctx,
+    coreVisual,
+    leftHinge,
+    rightHinge,
+    leftShellRotation,
+    rightShellRotation,
+  );
 
   const crown = transformLocal(root, { x: 22, y: -145 }, tilt, 1);
   drawImagePart(ctx, art, image, CLASSIC_ART_PARTS.boss.sightCrown, crown, {
@@ -1798,6 +2404,7 @@ function drawBoss(ctx, state, now, art, dynamics = null) {
   const motion = classicBossMotionPlan(state, now);
   const { base, target, direction, bodyBase } = motion;
   const locked = Boolean(state.lock);
+  const aimClamped = locked || (state.phase === PHASE.COMBINE && Boolean(state.predictedSide));
   const dynamicsKick = dynamics?.springValue(1) || 0;
   const braceStart = { x: bodyBase.x - direction * 60, y: bodyBase.y - 82 };
   const braceGround = { x: base.x - direction * 132, y: base.y + 30 };
@@ -1809,7 +2416,22 @@ function drawBoss(ctx, state, now, art, dynamics = null) {
   ctx.restore();
 
   drawBraceArm(ctx, braceStart, braceGround, motion.braceLoad, art);
-  const pile = drawDriver(
+  const pilePreview = { end: classicDriverContact(motion.driverHead) };
+  const authoredBody = drawAuthoredFurnaceBody(
+    ctx,
+    state,
+    bodyBase,
+    motion.bodyTilt,
+    now,
+    pilePreview,
+    art,
+    dynamicsKick,
+  );
+  if (!authoredBody) {
+    drawFurnaceBody(ctx, state, bodyBase, motion.bodyTilt, now, pilePreview);
+  }
+  drawMemoryRack(ctx, state, bodyBase, now, art);
+  drawDriver(
     ctx,
     motion.shoulder,
     motion.driverHead,
@@ -1817,18 +2439,6 @@ function drawBoss(ctx, state, now, art, dynamics = null) {
     state.visual.shake || 0,
     art,
   );
-  const authoredBody = drawAuthoredFurnaceBody(
-    ctx,
-    state,
-    bodyBase,
-    motion.bodyTilt,
-    now,
-    pile,
-    art,
-    dynamicsKick,
-  );
-  if (!authoredBody) drawFurnaceBody(ctx, state, bodyBase, motion.bodyTilt, now, pile);
-  drawMemoryRack(ctx, state, bodyBase, now, art);
 
   const sight = { x: bodyBase.x + direction * 23, y: bodyBase.y - 145 };
   const fixedSight = { x: base.x + direction * 23, y: base.y - 145 };
@@ -1841,7 +2451,7 @@ function drawBoss(ctx, state, now, art, dynamics = null) {
     ctx.fill();
     ctx.stroke();
   }
-  if (locked) {
+  if (aimClamped) {
     ctx.globalAlpha = 0.72 + motion.cableTension * 0.28;
     ctx.strokeStyle = "rgba(9,7,6,.9)";
     ctx.lineWidth = 7;
@@ -2185,14 +2795,21 @@ function drawDynamicParticles(ctx, dynamics) {
 
 function drawCoreClosureWarning(ctx, state, now) {
   const opportunity = classicCoreOpportunityPlan(state);
-  if (!opportunity.warning) return;
-  const point = projectWorld(state.boss);
+  const zone = classicCorePressureZonePlan(state);
+  if (!zone.active) return;
+  const point = zone.center;
   const progress = opportunity.closurePressure;
   const pulse = 0.86 + Math.sin(now * (opportunity.urgent ? 18 : 11)) * 0.14;
-  const radiusX = CONFIG.armorShockRadius * VIEW.scaleX;
-  const radiusY = CONFIG.armorShockRadius * VIEW.scaleY;
+  const radiusX = zone.radiusX;
+  const radiusY = zone.radiusY;
   const innerScale = mix(0.96, 0.78, progress);
   ctx.save();
+  ctx.globalAlpha = pulse;
+  ctx.fillStyle = opportunity.urgent
+    ? `rgba(157,66,43,${zone.fillAlpha})`
+    : `rgba(196,156,80,${zone.fillAlpha})`;
+  ellipse(ctx, point, radiusX, radiusY);
+  ctx.fill();
   ctx.globalAlpha = pulse;
   ctx.strokeStyle = opportunity.urgent
     ? `rgba(197,92,50,${0.58 + progress * 0.34})`
@@ -2221,12 +2838,35 @@ function drawCoreClosureWarning(ctx, state, now) {
     line(ctx, inner, outer);
     ctx.stroke();
   }
+
+  const notchHalf = 17;
+  const notchBack = {
+    x: zone.safeNotch.x - zone.direction.x * 20,
+    y: zone.safeNotch.y - zone.direction.y * 20,
+  };
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "rgba(8,7,6,.94)";
+  ctx.beginPath();
+  ctx.moveTo(zone.safeNotch.x + zone.direction.x * 14, zone.safeNotch.y + zone.direction.y * 14);
+  ctx.lineTo(notchBack.x + zone.normal.x * notchHalf, notchBack.y + zone.normal.y * notchHalf);
+  ctx.lineTo(notchBack.x - zone.normal.x * notchHalf, notchBack.y - zone.normal.y * notchHalf);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = COLORS.enamelLight;
+  ctx.lineWidth = 6;
+  ctx.lineJoin = "round";
+  lines(ctx, [
+    [{ x: notchBack.x + zone.normal.x * notchHalf, y: notchBack.y + zone.normal.y * notchHalf }, zone.safeNotch],
+    [{ x: notchBack.x - zone.normal.x * notchHalf, y: notchBack.y - zone.normal.y * notchHalf }, zone.safeNotch],
+  ]);
+  ctx.stroke();
   ctx.restore();
 }
 
-function drawGroundHint(ctx, at, label, color, direction = 0) {
+function drawGroundHint(ctx, at, label, color, direction = 0, cueScale = canvasCueScale(ctx)) {
   ctx.save();
   ctx.translate(at.x, at.y);
+  ctx.scale(cueScale, cueScale);
   ctx.transform(1, 0, 0.18, 0.72, 0, 0);
   ctx.font = "900 23px ui-sans-serif, system-ui, sans-serif";
   ctx.textAlign = "center";
@@ -2262,9 +2902,16 @@ export function classicFirstRunGuidanceStage(state) {
   }
   const elapsed = Number.isFinite(state.elapsed) ? state.elapsed : 0;
   if (
-    state.phase === PHASE.EXPLORE &&
-    elapsed <= 3.4 &&
+    state.phase === PHASE.ENGAGE &&
     state.memory.length === 0 &&
+    !state.lock
+  ) {
+    return "tracking";
+  }
+  if (
+    state.phase === PHASE.EXPLORE &&
+    elapsed >= 0 &&
+    state.memory.length < 3 &&
     !state.lock
   ) {
     return "escape";
@@ -2291,15 +2938,31 @@ function drawFirstRunGuidance(ctx, state, now) {
   const stage = classicFirstRunGuidanceStage(state);
   if (!stage) return;
   const player = projectWorld(state.player);
-  if (stage === "escape") {
-    const pulse = 0.78 + Math.sin(now * 9) * 0.14;
+  if (stage === "tracking") {
+    const pulse = 0.72 + Math.sin(now * 11) * 0.16;
     ctx.save();
     ctx.globalAlpha = pulse;
     drawGroundHint(
       ctx,
       { x: player.x, y: Math.min(620, player.y + 58) },
-      "WASD · 주홍선 밖으로",
+      "추적 중",
+      COLORS.heat,
+    );
+    ctx.restore();
+    return;
+  }
+  if (stage === "escape") {
+    const cue = classicExploreCuePlan(state, ctx?.canvas?.clientWidth);
+    const pulse = 0.78 + Math.sin(now * 9) * 0.14;
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    drawGroundHint(
+      ctx,
+      cue.active ? cue.hint : { x: player.x, y: Math.min(620, player.y + 58) },
+      `${cue.sampleNumber || state.memory.length + 1} / 3`,
       COLORS.enamelLight,
+      0,
+      cue.cueScale || canvasCueScale(ctx),
     );
     ctx.restore();
     return;
@@ -2311,7 +2974,7 @@ function drawFirstRunGuidance(ctx, state, now) {
     drawGroundHint(
       ctx,
       { x: clamp(origin.x + direction * 155, 175, 1105), y: clamp(origin.y + 116, 190, 620) },
-      "반대로",
+      "LOCK · 반대로",
       COLORS.enamelLight,
       direction,
     );
@@ -2331,6 +2994,7 @@ function drawFirstRunGuidance(ctx, state, now) {
   }
 
   if (stage === "exit") {
+    const opportunity = classicCoreOpportunityPlan(state);
     const exit = classicCoreExitCuePlan(state);
     const { player: cuePlayer, direction, normal, arrowStart, arrowEnd } = exit;
     ctx.save();
@@ -2359,7 +3023,7 @@ function drawFirstRunGuidance(ctx, state, now) {
         x: clamp(mix(cuePlayer.x, arrowEnd.x, 0.58), 150, 1130),
         y: clamp(mix(cuePlayer.y, arrowEnd.y, 0.58) + 28, 170, 620),
       },
-      "2타 · 이탈",
+      opportunity.hits >= 3 ? "3타 · 즉시 이탈" : "2타 · 이탈 준비",
       COLORS.enamelLight,
     );
   }
@@ -2385,8 +3049,12 @@ function drawMinimalGameOver(ctx, state) {
 
 function waitingState() {
   return {
-    phase: PHASE.WAITING,
-    phaseTime: 0,
+    // The title screen previews the real opening pose: a weapon-bearing boss
+    // already tracking the player, rather than an ambiguous stowed emblem.
+    phase: PHASE.ENGAGE,
+    phaseTime: CONFIG.engageDuration * 0.55,
+    elapsed: 0,
+    round: 1,
     player: { x: CONFIG.playerStartX, y: CONFIG.playerStartY, lastMove: { x: 0, y: -1 } },
     boss: { x: CONFIG.bossX, y: CONFIG.bossY, coreOpen: false },
     memory: [],
@@ -2397,7 +3065,11 @@ function waitingState() {
   };
 }
 
-export function renderGame(ctx, state, { now = 0, art = null, dynamics = null } = {}) {
+export function renderGame(
+  ctx,
+  state,
+  { now = 0, art = null, dynamics = null, memoryTraces = [] } = {},
+) {
   ctx.save();
   ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
   ctx.fillStyle = COLORS.deepSoot;
@@ -2405,12 +3077,14 @@ export function renderGame(ctx, state, { now = 0, art = null, dynamics = null } 
   drawArena(ctx, now);
 
   const scene = state.phase === PHASE.WAITING ? waitingState() : state;
+  drawTrackingTrace(ctx, scene, now);
   drawExploreWarning(ctx, scene);
   drawKilnTarget(ctx, scene, now, art);
   drawDashSkid(ctx, scene);
   drawCoreApproachPath(ctx, scene, now);
   drawCoreClosureWarning(ctx, scene, now);
   drawCoreReflection(ctx, scene, now);
+  drawMemoryGroundTraces(ctx, scene, memoryTraces, now);
   drawBoss(ctx, scene, now, art, dynamics);
   drawPlayer(ctx, scene, now, art, dynamics);
   drawImpact(ctx, scene, now, art);
@@ -2460,11 +3134,53 @@ export function createRenderer(canvas) {
   let images = null;
   let loadGeneration = 0;
   let previousNow = null;
+  let memoryGroundTraces = [];
+  let pendingMemoryContinuation = null;
+  const memoryTraceEventIds = new Set();
 
   function updateDynamics(state, now) {
     const events = Array.isArray(state.events) ? state.events : [];
     if (events.some((event) => event.type === "start" || event.type === "restart")) {
       dynamics.reset();
+      memoryGroundTraces = [];
+      pendingMemoryContinuation = null;
+      memoryTraceEventIds.clear();
+    }
+    for (const event of events) {
+      if (event.type === "outsmart" && (event.side === "left" || event.side === "right")) {
+        pendingMemoryContinuation = {
+          x: state.player.x,
+          y: state.player.y,
+          side: event.side,
+        };
+      }
+      if (event.type === "prediction_neutral") {
+        pendingMemoryContinuation = event.actualSide === "left" || event.actualSide === "right"
+          ? { x: state.player.x, y: state.player.y, side: event.actualSide }
+          : null;
+        memoryGroundTraces = pendingMemoryContinuation ? [pendingMemoryContinuation] : [];
+      }
+      if (event.type === "core_close" || event.type === "round_start") {
+        memoryGroundTraces = pendingMemoryContinuation ? [pendingMemoryContinuation] : [];
+        pendingMemoryContinuation = null;
+      }
+      if (event.type !== "remember" || memoryTraceEventIds.has(event.id)) continue;
+      const marker = state.visual?.escapeMarker;
+      if (!marker || (event.side !== "left" && event.side !== "right")) continue;
+      memoryTraceEventIds.add(event.id);
+      memoryGroundTraces = [
+        ...memoryGroundTraces,
+        { x: marker.x, y: marker.y, side: event.side },
+      ].slice(-3);
+    }
+    const keepsLockedEvidence = Boolean(state.lock)
+      || state.phase === PHASE.CORE_OPEN
+      || state.phase === PHASE.ROUND_CLEAR;
+    if (!keepsLockedEvidence && state.memory?.length < memoryGroundTraces.length) {
+      const retainedSide = state.memory?.[0];
+      memoryGroundTraces = retainedSide === "left" || retainedSide === "right"
+        ? [{ x: state.player.x, y: state.player.y, side: retainedSide }]
+        : [];
     }
     dynamics.setReducedMotion(Boolean(reducedMotionQuery?.matches));
 
@@ -2557,6 +3273,7 @@ export function createRenderer(canvas) {
       now,
       art: images ? { images, metrics: renderer.info } : null,
       dynamics,
+      memoryTraces: memoryGroundTraces,
     });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }

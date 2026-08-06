@@ -1,23 +1,85 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PHASE, createGameState } from "../src/game-core.mjs";
+import { CONFIG, PHASE, createGameState, timingForRound } from "../src/game-core.mjs";
 import {
+  CLASSIC_CORE_MISS_GAP,
+  CLASSIC_MEMORY_FLIGHT_SECONDS,
   CLASSIC_MEMORY_DIRECTION_GLYPH,
   classicAuthoredBladePlan,
   classicBladeContactPlan,
   classicBraceArticulationPlan,
   classicCoreScreenAnchor,
+  classicCorePressureZonePlan,
+  classicCoreExitCuePlan,
+  classicCoreVisualPlan,
   classicDriverContact,
   classicImpactScreenAnchor,
+  classicMemoryGroundTracePlan,
+  classicMemoryRackSidePlan,
+  classicMemorySocketPlan,
+  classicExploreCuePlan,
   classicPlayerFrontReadabilityPlan,
   classicPlayerGroundingPlan,
   projectWorld,
+  classicViewportCueScale,
 } from "../src/render-classic.mjs";
 
 test("memory direction glyph remains a filled readable mark at 320", () => {
-  assert.ok(CLASSIC_MEMORY_DIRECTION_GLYPH.cssWidthAt320 >= 7);
-  assert.ok(CLASSIC_MEMORY_DIRECTION_GLYPH.cssHeightAt320 >= 6);
+  assert.ok(CLASSIC_MEMORY_DIRECTION_GLYPH.cssWidthAt320 >= 12);
+  assert.ok(CLASSIC_MEMORY_DIRECTION_GLYPH.cssHeightAt320 >= 10);
+  assert.equal(classicViewportCueScale(320), 1.55);
+  assert.equal(classicViewportCueScale(1280), 1);
+});
+
+test("first-round explore repeats numbered bilateral escape hardware for samples one to three", () => {
+  const state = createGameState({ started: true });
+  state.round = 1;
+  state.phase = PHASE.EXPLORE;
+  state.explore = { lineX: 24, sampleEligible: true };
+  for (const memoryCount of [0, 1, 2]) {
+    state.memory = Array.from({ length: memoryCount }, () => "left");
+    const desktop = classicExploreCuePlan(state, 1280);
+    const compact = classicExploreCuePlan(state, 320);
+    assert.equal(desktop.sampleNumber, memoryCount + 1);
+    assert.ok(desktop.left.inner.x < desktop.center.x - desktop.half);
+    assert.ok(desktop.right.inner.x > desktop.center.x + desktop.half);
+    assert.ok(compact.cueScale > desktop.cueScale);
+    assert.deepEqual(compact.center, desktop.center, "responsive cues must not move the firing lane");
+  }
+});
+
+test("memory evidence flies for 420ms into three body-side sockets and keeps three ground traces", () => {
+  assert.equal(CLASSIC_MEMORY_FLIGHT_SECONDS, 0.42);
+  const base = { x: 640, y: 310 };
+  const sockets = [0, 1, 2].map((index) => classicMemorySocketPlan(base, index));
+  assert.ok(sockets.every((socket) => socket.x < base.x));
+  assert.equal(new Set(sockets.map((socket) => socket.y)).size, 3);
+
+  const traces = classicMemoryGroundTracePlan([
+    { x: -180, y: 80, side: "left" },
+    { x: -90, y: 60, side: "right" },
+    { x: 20, y: 40, side: "right" },
+    { x: 110, y: 20, side: "left" },
+  ]);
+  assert.equal(traces.length, 3);
+  assert.deepEqual(traces.map((trace) => trace.side), ["right", "right", "left"]);
+});
+
+test("the memory rack crosses to the brace side when a left-side driver locks", () => {
+  const state = createGameState({ started: true });
+  assert.equal(classicMemoryRackSidePlan(state), -1);
+
+  state.predictedSide = "left";
+  state.phase = PHASE.COMBINE;
+  state.phaseTime = 0.55;
+  assert.equal(classicMemoryRackSidePlan(state), -1);
+  state.phaseTime = 0;
+  assert.equal(classicMemoryRackSidePlan(state), 1);
+
+  state.phase = PHASE.LOCK;
+  assert.equal(classicMemoryRackSidePlan(state), 1);
+  assert.ok(classicMemorySocketPlan({ x: 640, y: 310 }, 1, 1).x > 640);
 });
 
 function coreContactState() {
@@ -56,6 +118,85 @@ test("classic direct-hit sword tip, core and impact share one screen anchor", ()
   const closeCore = classicCoreScreenAnchor(closeState, now);
   const closeBlade = classicBladeContactPlan(closeState, now);
   assert.ok(Math.hypot(closeBlade.tip.x - closeCore.x, closeBlade.tip.y - closeCore.y) <= 1e-6);
+});
+
+test("an open-core gameplay miss stops the blade at least 18 logical pixels before the core surface", () => {
+  const state = coreContactState();
+  state.phaseTime = timingForRound(1).coreOpen - 0.24;
+  state.visual.attack = { hit: false, armor: false, remaining: 0.239 };
+  state.visual.impact = null;
+  state.player = { ...state.player, x: 0, y: 92 };
+  const blade = classicBladeContactPlan(state, 2.4);
+  const core = classicCoreVisualPlan(state, 2.4);
+  const centerGap = Math.hypot(blade.tip.x - core.anchor.x, blade.tip.y - core.anchor.y);
+  assert.equal(blade.openCoreMiss, true);
+  assert.ok(centerGap - core.radius >= CLASSIC_CORE_MISS_GAP - 1e-6);
+  assert.ok(Math.hypot(blade.tip.x - core.anchor.x, blade.tip.y - core.anchor.y) > 1);
+});
+
+test("two and three core hits expose the exact shock ellipse and an outside player-facing safe notch", () => {
+  for (const hits of [2, 3]) {
+    const state = coreContactState();
+    state.coreHitsThisWindow = hits;
+    state.phaseTime = hits === 3 ? 0.38 : 1.2;
+    state.player = { ...state.player, x: 56, y: -20 };
+    const zone = classicCorePressureZonePlan(state);
+    assert.equal(zone.active, true);
+    assert.equal(zone.radiusX, CONFIG.armorShockRadius * 1.03);
+    assert.equal(zone.radiusY, CONFIG.armorShockRadius * 0.77);
+    const normalizedNotch = Math.hypot(
+      (zone.safeNotch.x - zone.center.x) / zone.radiusX,
+      (zone.safeNotch.y - zone.center.y) / zone.radiusY,
+    );
+    assert.ok(Math.abs(normalizedNotch - 1) <= 1e-9);
+  }
+});
+
+test("LLL and RRR exit arrows choose arena-valid radial exits clear of the giant driver", () => {
+  const plans = [-1, 1].map((sign) => {
+    const state = coreContactState();
+    state.player = { ...state.player, x: sign * 56, y: -20 };
+    state.predictedSide = sign < 0 ? "left" : "right";
+    state.lock = {
+      side: state.predictedSide,
+      origin: { x: sign * 282, y: 112 },
+      zone: { x: sign * 376, y: 112 },
+      createdAt: 4,
+    };
+    const plan = classicCoreExitCuePlan(state);
+    const boundaryRadius = Math.hypot(
+      plan.boundaryWorld.x - state.boss.x,
+      plan.boundaryWorld.y - state.boss.y,
+    );
+    const endRadius = Math.hypot(
+      plan.endWorld.x - state.boss.x,
+      plan.endWorld.y - state.boss.y,
+    );
+    const arenaAmount =
+      (plan.endWorld.x / (CONFIG.arenaRadiusX - CONFIG.playerRadius)) ** 2
+      + (plan.endWorld.y / (CONFIG.arenaRadiusY - CONFIG.playerRadius)) ** 2;
+    assert.ok(plan.candidateCount >= 3);
+    assert.ok(plan.driverClearance >= 120, `${plan.driverClearance}px overlaps the driver`);
+    assert.ok(Math.abs(boundaryRadius - CONFIG.armorShockRadius) <= 1e-9);
+    assert.ok(endRadius > CONFIG.armorShockRadius);
+    assert.ok(arenaAmount < 1);
+    return plan;
+  });
+  assert.ok(plans[0].direction.x > 0, "LLL exits away from its left driver");
+  assert.ok(plans[1].direction.x < 0, "RRR exits away from its right driver");
+  assert.ok(Math.abs(plans[0].driverClearance - plans[1].driverClearance) <= 1e-9);
+});
+
+test("authored core plan exposes persistent one, two and three-hit damage stages", () => {
+  for (const hits of [1, 2, 3]) {
+    const state = coreContactState();
+    state.coreHitsThisWindow = hits;
+    state.visual.impact.remaining = 0.24;
+    const core = classicCoreVisualPlan(state, 2.4);
+    assert.equal(core.hitCount, hits);
+    assert.equal(core.crackCount, hits);
+    assert.ok(core.contactMarkAlpha > 0 && core.contactMarkAlpha < 1);
+  }
 });
 
 test("authored blade maps its real grip and tip onto the contact plan within one pixel", () => {

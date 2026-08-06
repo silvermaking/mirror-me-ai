@@ -16,6 +16,10 @@ const startButton = document.querySelector("button#start-button");
 const muteButton = document.querySelector("button#mute-button");
 const statusLive = document.querySelector("div#status-live");
 const touchControls = document.querySelector("div#touch-controls");
+const touchDpad = document.querySelector("div.touch-dpad");
+const touchActions = document.querySelector("div.touch-actions");
+const touchAttack = document.querySelector("button.touch-attack");
+const touchDash = document.querySelector("button.touch-dash");
 const startOverlay = document.querySelector("#start-overlay");
 const loadingCopy = document.querySelector("#loading-copy");
 const gameTitle = document.querySelector("#game-title");
@@ -34,6 +38,10 @@ if (!(startButton instanceof HTMLButtonElement)) throw new Error("#start-button 
 if (!(muteButton instanceof HTMLButtonElement)) throw new Error("#mute-button is required");
 if (!(statusLive instanceof HTMLDivElement)) throw new Error("#status-live is required");
 if (!(touchControls instanceof HTMLDivElement)) throw new Error("#touch-controls is required");
+if (!(touchDpad instanceof HTMLDivElement)) throw new Error(".touch-dpad is required");
+if (!(touchActions instanceof HTMLDivElement)) throw new Error(".touch-actions is required");
+if (!(touchAttack instanceof HTMLButtonElement)) throw new Error(".touch-attack is required");
+if (!(touchDash instanceof HTMLButtonElement)) throw new Error(".touch-dash is required");
 
 const renderer = createRenderer(canvas);
 const audio = createAudioManager();
@@ -46,6 +54,7 @@ const BEST_KEY = "mirror-me-ai.best.v1";
 let state = createGameState();
 let best = readBest();
 let lastFrame = performance.now();
+let lastCompletedMemory = [];
 
 function finiteRecord(value, fallback = 0) {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -100,6 +109,19 @@ function sideMark(side) {
   return side === "left" ? "←" : side === "right" ? "→" : "·";
 }
 
+function completedMemoryPattern(memory) {
+  if (!Array.isArray(memory) || memory.length < 3) return null;
+  const pattern = memory.slice(-3);
+  return pattern.every((side) => side === "left" || side === "right")
+    ? pattern
+    : null;
+}
+
+function memoryForGameOver(death) {
+  return completedMemoryPattern(death?.memory)
+    || (lastCompletedMemory.length === 3 ? [...lastCompletedMemory] : death?.memory || []);
+}
+
 function formatTime(seconds) {
   const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
   const minutes = Math.floor(safe / 60);
@@ -114,11 +136,18 @@ function deathTitleFor(death) {
   return `${death.attackName || "공격"}에 쓰러졌다`;
 }
 
+function displayDeathTip(death) {
+  if (death?.attackName === "탐색 베기") {
+    return "주홍선이 고정된 뒤, 옆으로 한 번 이동";
+  }
+  return death?.tip || "다음에는 위험 구역 밖으로 이동";
+}
+
 function eventAnnouncement(event) {
   switch (event.type) {
     case "start":
     case "restart":
-      return "전투 시작. WASD나 대시로 주황 위험 구역 밖으로 피하세요.";
+      return "전투 시작. 보스 시선이 멈춰 주홍선이 고정되면 옆으로 피하세요.";
     case "remember":
       return `AI 기억 ${event.memory?.length || 0}/3. ${sideLabel(event.side)} 회피.`;
     case "combine":
@@ -146,7 +175,7 @@ function eventAnnouncement(event) {
     case "round_clear":
       return `${event.round} 라운드 돌파.`;
     case "game_over":
-      return `게임 오버. ${state.death?.tip || "다음 행동을 바꿔 보세요."}`;
+      return `게임 오버. ${displayDeathTip(state.death)}`;
     default:
       return "";
   }
@@ -182,6 +211,13 @@ function processEvents(events) {
     const key = `${event.id}:${event.type}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    if (event.type === "start" || event.type === "restart") {
+      lastCompletedMemory = [];
+    }
+    const completed = event.type === "remember"
+      ? completedMemoryPattern(event.memory)
+      : null;
+    if (completed) lastCompletedMemory = completed;
     audio.play(event);
     const nextAnnouncement = eventAnnouncement(event);
     const priority = eventAnnouncementPriority(event.type);
@@ -198,7 +234,22 @@ function updateOverlay() {
   if (!(startOverlay instanceof HTMLElement)) return;
   const ready = renderer.isReady;
   const error = renderer.status === "error";
+  const gameOver = state.phase === PHASE.GAME_OVER;
   touchControls.hidden = state.phase === PHASE.WAITING;
+  touchControls.dataset.mode = gameOver ? "retry" : "combat";
+  touchDpad.hidden = gameOver;
+  touchAttack.hidden = gameOver;
+  touchActions.setAttribute("aria-label", gameOver ? "재도전" : "전투 행동");
+  touchDash.textContent = gameOver ? "재도전" : "대시";
+  touchDash.setAttribute("aria-keyshortcuts", "Space");
+  if (gameOver) {
+    const retryReady = canRestart(state);
+    touchDash.setAttribute("aria-label", retryReady ? "재도전 (Space)" : "재도전 준비 중");
+    touchDash.setAttribute("aria-disabled", String(!retryReady));
+  } else {
+    touchDash.setAttribute("aria-label", "대시 (Space)");
+    touchDash.removeAttribute("aria-disabled");
+  }
   startOverlay.hidden = ready && state.phase !== PHASE.WAITING;
   startOverlay.dataset.status = error ? "error" : ready ? "ready" : "loading";
   if (loadingCopy instanceof HTMLElement) {
@@ -230,7 +281,7 @@ function updateOverlay() {
       gameOverTitle.textContent = deathTitleFor(state.death);
     }
     if (gameOverMemory instanceof HTMLOListElement) {
-      const remembered = state.death?.memory || [];
+      const remembered = memoryForGameOver(state.death);
       [...gameOverMemory.children].forEach((cell, index) => {
         if (!(cell instanceof HTMLElement)) return;
         const side = remembered[index] || "none";
@@ -245,7 +296,7 @@ function updateOverlay() {
         : `치명타 · ${state.death?.attackName || "전장 공격"}`;
     }
     if (gameOverTip instanceof HTMLElement) {
-      gameOverTip.textContent = state.death?.tip || "다음에는 위험 구역 밖으로 이동";
+      gameOverTip.textContent = displayDeathTip(state.death);
     }
     if (gameOverRun instanceof HTMLElement) {
       gameOverRun.textContent = `ROUND ${state.round} · ${state.stats.score} PTS · ${formatTime(state.elapsed)} · OUTSMART ${state.stats.outsmarts}`;

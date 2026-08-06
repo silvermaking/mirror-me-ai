@@ -83,10 +83,17 @@ test("first-run guidance follows the physical cause instead of preceding it", ()
   state.round = 1;
   state.elapsed = 0.2;
   state.phase = PHASE.ENGAGE;
-  assert.equal(classicFirstRunGuidanceStage(state), null);
+  assert.equal(classicFirstRunGuidanceStage(state), "tracking");
 
   state.phase = PHASE.EXPLORE;
   assert.equal(classicFirstRunGuidanceStage(state), "escape");
+  state.memory = ["left"];
+  state.elapsed = 4.2;
+  assert.equal(classicFirstRunGuidanceStage(state), "escape");
+  state.memory = ["left", "right"];
+  assert.equal(classicFirstRunGuidanceStage(state), "escape");
+  state.memory = ["left", "right", "left"];
+  assert.equal(classicFirstRunGuidanceStage(state), null);
 
   state.phase = PHASE.LOCK;
   state.lock = { side: "right", origin: { x: 0, y: 80 }, zone: { x: 154, y: -4 } };

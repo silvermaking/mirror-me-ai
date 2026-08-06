@@ -4,9 +4,12 @@ import test from "node:test";
 import { PHASE, createGameState } from "../src/game-core.mjs";
 import {
   CLASSIC_ATTACK_TIMING,
+  CLASSIC_CORE_CONTACT_MARK_MS,
+  CLASSIC_CORE_HIT_LEVELS,
   CLASSIC_PLAYER_DRAW_ORDER,
   classicCoreOpportunityPlan,
   classicCoreReactionPlan,
+  classicMemoryVotePlan,
   classicPlayerPosePlan,
 } from "../src/classic-choreography.mjs";
 
@@ -67,11 +70,15 @@ test("only a direct core impact creates ordered core reaction channels", () => {
   state.boss.coreOpen = true;
   assert.deepEqual(classicCoreReactionPlan(state), {
     directHit: false,
+    hitLevel: 0,
     hitAge: Infinity,
     faceCompression: 0,
     finsKick: 0,
     shutterKick: 0,
     bodyKick: 0,
+    driverShoulderKick: 0,
+    shellKick: 0,
+    cracks: 0,
   });
 
   state.visual.impact = { tone: "core", remaining: 0.3 };
@@ -95,6 +102,23 @@ test("only a direct core impact creates ordered core reaction channels", () => {
 
   state.visual.impact.remaining = 0.175;
   assert.notEqual(classicCoreReactionPlan(state).bodyKick, 0);
+});
+
+test("core hit levels escalate cracks and physical recoil without extending contact truth", () => {
+  assert.equal(CLASSIC_CORE_CONTACT_MARK_MS, 120);
+  assert.deepEqual(CLASSIC_CORE_HIT_LEVELS.map((level) => level.cracks), [1, 2, 3]);
+  assert.deepEqual(CLASSIC_CORE_HIT_LEVELS.map((level) => level.driverShoulderPx), [16, 30, 48]);
+
+  const samples = CLASSIC_CORE_HIT_LEVELS.map((level) => {
+    const state = createGameState({ started: true });
+    state.coreHitsThisWindow = level.hit;
+    state.visual.impact = { tone: "core", remaining: 0.155 };
+    return classicCoreReactionPlan(state);
+  });
+  assert.deepEqual(samples.map((sample) => sample.hitLevel), [1, 2, 3]);
+  assert.deepEqual(samples.map((sample) => sample.cracks), [1, 2, 3]);
+  assert.ok(Math.abs(samples[2].driverShoulderKick) > Math.abs(samples[1].driverShoulderKick));
+  assert.ok(Math.abs(samples[1].driverShoulderKick) > Math.abs(samples[0].driverShoulderKick));
 });
 
 test("the second core hit visibly preloads closure before the risky third hit", () => {
@@ -137,5 +161,22 @@ test("core opportunity choreography is deterministic and never mutates gameplay 
   state.coreHitsThisWindow = 1;
   const before = structuredClone(state);
   assert.deepEqual(classicCoreOpportunityPlan(state), classicCoreOpportunityPlan(state));
+  assert.deepEqual(state, before);
+});
+
+test("three physical memory votes ratchet toward the immutable majority prediction", () => {
+  const state = createGameState({ started: true });
+  state.phase = PHASE.COMBINE;
+  state.memory = ["left", "right", "right"];
+  state.predictedSide = "right";
+  const before = structuredClone(state);
+  const early = classicMemoryVotePlan(state, { progress: 0.24 });
+  const late = classicMemoryVotePlan(state, { progress: 0.9 });
+  assert.equal(late.active, true);
+  assert.equal(late.majorityCount, 2);
+  assert.equal(late.direction, 1);
+  assert.deepEqual(late.votes.map((vote) => vote.agrees), [false, true, true]);
+  assert.ok(late.pull > early.pull);
+  assert.ok(late.ratchetStep > early.ratchetStep);
   assert.deepEqual(state, before);
 });

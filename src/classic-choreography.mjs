@@ -19,6 +19,41 @@ export const CLASSIC_PLAYER_DRAW_ORDER = Object.freeze([
   "blade",
 ]);
 
+export const CLASSIC_CORE_CONTACT_MARK_MS = 120;
+
+export const CLASSIC_CORE_HIT_LEVELS = Object.freeze([
+  Object.freeze({
+    hit: 1,
+    face: 1,
+    fins: 0.72,
+    shutters: 0.64,
+    body: 0.58,
+    driverShoulderPx: 16,
+    shellRadians: 0.04,
+    cracks: 1,
+  }),
+  Object.freeze({
+    hit: 2,
+    face: 1.18,
+    fins: 1,
+    shutters: 0.95,
+    body: 0.9,
+    driverShoulderPx: 30,
+    shellRadians: 0.1,
+    cracks: 2,
+  }),
+  Object.freeze({
+    hit: 3,
+    face: 1.36,
+    fins: 1.26,
+    shutters: 1.28,
+    body: 1.28,
+    driverShoulderPx: 48,
+    shellRadians: 0.18,
+    cracks: 3,
+  }),
+]);
+
 const CORE_IMPACT_DURATION = 0.3;
 const CORE_CLOSE_WARNING_SECONDS = 0.74;
 
@@ -173,29 +208,44 @@ export function classicCoreReactionPlan(state) {
   if (!directHit) {
     return Object.freeze({
       directHit: false,
+      hitLevel: 0,
       hitAge: Infinity,
       faceCompression: 0,
       finsKick: 0,
       shutterKick: 0,
       bodyKick: 0,
+      driverShoulderKick: 0,
+      shellKick: 0,
+      cracks: 0,
     });
   }
 
+  const hitLevel = clamp(
+    Math.floor(Number.isFinite(state?.coreHitsThisWindow) ? state.coreHitsThisWindow : 1),
+    1,
+    CLASSIC_CORE_HIT_LEVELS.length,
+  );
+  const level = CLASSIC_CORE_HIT_LEVELS[hitLevel - 1];
   const hitAge = clamp(
     CORE_IMPACT_DURATION - (Number.isFinite(impact.remaining) ? impact.remaining : CORE_IMPACT_DURATION),
     0,
     CORE_IMPACT_DURATION,
   );
-  const faceCompression = Math.exp(-18 * hitAge) * Math.cos(34 * hitAge);
+  const faceCompression = Math.exp(-18 * hitAge) * Math.cos(34 * hitAge) * level.face;
 
   return Object.freeze({
     directHit: true,
+    hitLevel,
     hitAge,
     faceCompression,
     // Physical propagation order: face -> fins -> shutters -> chassis.
-    finsKick: delayedWave(hitAge, 0.04, 18, 38),
-    shutterKick: delayedWave(hitAge, 0.075, 17, 34),
-    bodyKick: delayedWave(hitAge, 0.11, 15, 42),
+    finsKick: delayedWave(hitAge, 0.04, 18, 38) * level.fins,
+    shutterKick: delayedWave(hitAge, 0.075, 17, 34) * level.shutters,
+    bodyKick: delayedWave(hitAge, 0.11, 15, 42) * level.body,
+    driverShoulderKick:
+      delayedWave(hitAge, 0.11, 14, 32) * level.driverShoulderPx,
+    shellKick: delayedWave(hitAge, 0.075, 17, 34) * level.shellRadians,
+    cracks: level.cracks,
   });
 }
 
@@ -242,5 +292,56 @@ export function classicCoreOpportunityPlan(state) {
     warning: hits >= 2 || remaining <= CORE_CLOSE_WARNING_SECONDS,
     urgent: hits >= 3 || remaining <= 0.42,
     closurePressure,
+  });
+}
+
+/**
+ * Renderer-only vote linkage for the three authored memory pawls.
+ *
+ * The gameplay state has already chosen `predictedSide`; this plan merely
+ * exposes how the three visible samples pull a ratchet toward that result.
+ * It never recomputes or changes the prediction used by game-core.
+ */
+export function classicMemoryVotePlan(state, { progress } = {}) {
+  const samples = Array.isArray(state?.memory)
+    ? state.memory.slice(-3).filter((side) => side === "left" || side === "right")
+    : [];
+  const leftCount = samples.filter((side) => side === "left").length;
+  const rightCount = samples.filter((side) => side === "right").length;
+  const predictedSide = state?.predictedSide === "left" || state?.predictedSide === "right"
+    ? state.predictedSide
+    : rightCount > leftCount
+      ? "right"
+      : leftCount > rightCount
+        ? "left"
+        : null;
+  const direction = predictedSide === "left" ? -1 : predictedSide === "right" ? 1 : 0;
+  const active = samples.length === 3 && Boolean(predictedSide);
+  const resolvedProgress = active
+    ? state?.phase === "combine"
+      ? clamp(Number.isFinite(progress) ? progress : 0, 0, 1)
+      : 1
+    : 0;
+  const eased = easeInOutCubic(resolvedProgress);
+  const ratchetStep = active ? Math.min(3, Math.floor(resolvedProgress * 4)) : 0;
+  const votes = samples.map((side, index) => Object.freeze({
+    index,
+    side,
+    direction: side === "left" ? -1 : 1,
+    agrees: side === predictedSide,
+    engagement: clamp(resolvedProgress * 3 - index * 0.34, 0, 1),
+  }));
+
+  return Object.freeze({
+    active,
+    predictedSide,
+    direction,
+    leftCount,
+    rightCount,
+    majorityCount: Math.max(leftCount, rightCount),
+    progress: resolvedProgress,
+    ratchetStep,
+    pull: direction * eased,
+    votes: Object.freeze(votes),
   });
 }

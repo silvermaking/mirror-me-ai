@@ -9,7 +9,7 @@
       content="당신의 습관을 읽는 AI 보스를 속이는 짧은 아레나 액션 게임"
     />
     <title>Mirror Me AI</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=classic-asset-2" />
     <script type="importmap">
       {
         "imports": {
@@ -45,7 +45,7 @@
             <h1 id="game-title">Mirror Me</h1>
             <p id="game-hook" class="game-hook">
               <strong>당신이 피한 방향을, 보스는 기억한다.</strong>
-              주홍 위험선 밖에서 먼저 살아남아라.
+              <span class="start-cue">시선이 멈춘 순간, 주홍선 밖으로.</span>
               <span class="visually-hidden">첫 세 번의 회피가 보스의 다음 공격이 된다. 열린 코어 직접 공격.</span>
             </p>
             <div class="start-rule" aria-label="전투 규칙">
@@ -106,13 +106,25 @@
             <button class="touch-button touch-right" type="button" data-control="right" aria-label="오른쪽으로 이동">→</button>
           </div>
           <div class="touch-actions" role="group" aria-label="전투 행동">
-            <button class="touch-button touch-attack" type="button" data-control="attack">공격</button>
-            <button class="touch-button touch-dash" type="button" data-control="dash">대시</button>
+            <button
+              class="touch-button touch-attack"
+              type="button"
+              data-control="attack"
+              aria-label="공격 (J)"
+              aria-keyshortcuts="J"
+            >공격</button>
+            <button
+              class="touch-button touch-dash"
+              type="button"
+              data-control="dash"
+              aria-label="대시 (Space)"
+              aria-keyshortcuts="Space"
+            >대시</button>
           </div>
         </div>
       </section>
     </main>
 
-    <script type="module" src="./src/main.js"></script>
+    <script type="module" src="./src/main.js?v=classic-asset-2"></script>
   </body>
 </html>

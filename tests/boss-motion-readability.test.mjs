@@ -3,10 +3,12 @@ import test from "node:test";
 
 import { CONFIG, PHASE, createGameState, timingForRound } from "../src/game-core.mjs";
 import {
+  CLASSIC_EXPLORE_MOTION,
   classicBossMotionPlan,
   classicCoreVisualPlan,
   classicLockVisualPlan,
   classicMemoryMotionPlan,
+  classicTrackingTracePlan,
 } from "../src/render-classic.mjs";
 
 function lockedState(phase, progress = 0) {
@@ -53,6 +55,70 @@ test("PREDICTION has load, hold and strike poses with mobile-readable travel", (
   const cssTravelAt320 = (Math.max(...gaps) - Math.min(...gaps)) * 0.25;
   assert.ok(cssTravelAt320 >= 18, `${cssTravelAt320}px is too little driver travel at 320px`);
   assert.ok(samples.every((plan) => !plan.contact));
+});
+
+test("ENGAGE tracks the real player x, then EXPLORE fixes one charged firing lane", () => {
+  const state = createGameState({ started: true });
+  state.phase = PHASE.ENGAGE;
+  state.player.x = -120;
+  const left = classicBossMotionPlan(state, 0);
+  state.player.x = 140;
+  const right = classicBossMotionPlan(state, 0.1);
+  assert.equal(left.stage, "tracking");
+  assert.ok(left.target.x < right.target.x);
+  assert.equal(classicTrackingTracePlan(state).fixed, false);
+
+  state.phase = PHASE.EXPLORE;
+  state.explore = { lineX: 36, sampleEligible: true };
+  state.phaseTime = timingForRound(1).explore;
+  const fixedStart = classicBossMotionPlan(state, 0.2);
+  state.player.x = -220;
+  state.phaseTime = timingForRound(1).explore * (1 - CLASSIC_EXPLORE_MOTION.chargeEnd);
+  const charged = classicBossMotionPlan(state, 0.8);
+  state.phaseTime = timingForRound(1).explore * 0.02;
+  const fired = classicBossMotionPlan(state, 1.3);
+  assert.equal(fixedStart.target.x, charged.target.x);
+  assert.equal(charged.target.x, fired.target.x);
+  assert.equal(classicTrackingTracePlan(state).fixed, true);
+  assert.ok(charged.driverRetract > fixedStart.driverRetract);
+  assert.ok(fired.driverRetract < charged.driverRetract);
+});
+
+test("each first-round recover reacquires the player before the next numbered lane clamps", () => {
+  const state = createGameState({ started: true });
+  state.round = 1;
+  state.memory = ["left"];
+  state.phase = PHASE.EXPLORE_RECOVER;
+  state.player.x = -140;
+  const left = classicBossMotionPlan(state, 0);
+  state.player.x = 160;
+  const right = classicBossMotionPlan(state, 0.1);
+  assert.equal(left.stage, "tracking-recover");
+  assert.ok(left.target.x < right.target.x);
+  assert.equal(classicTrackingTracePlan(state).sampleNumber, 2);
+
+  state.memory = ["left", "right"];
+  state.phase = PHASE.EXPLORE;
+  state.explore = { lineX: 42, sampleEligible: true };
+  const fixed = classicBossMotionPlan(state, 0.2);
+  state.player.x = -220;
+  assert.equal(classicBossMotionPlan(state, 0.3).target.x, fixed.target.x);
+  assert.equal(classicTrackingTracePlan(state).sampleNumber, 3);
+});
+
+test("COMBINE keeps the driver on the majority side while the player moves", () => {
+  const state = createGameState({ started: true });
+  state.phase = PHASE.COMBINE;
+  state.phaseTime = 0.3;
+  state.memory = ["left", "right", "right"];
+  state.predictedSide = "right";
+  state.player.x = -200;
+  const first = classicBossMotionPlan(state, 0);
+  state.player.x = 220;
+  const moved = classicBossMotionPlan(state, 0.1);
+  assert.equal(first.target.x, moved.target.x);
+  assert.equal(first.direction, 1);
+  assert.equal(first.aimClamped, true);
 });
 
 test("driver axis stays immutable after LOCK and contacts only on resolution", () => {
@@ -126,12 +192,14 @@ test("memory insertion precedes combine alignment and LOCK removes wobble state"
   state.memory = ["right", "right", "right"];
   state.phase = PHASE.COMBINE;
   state.phaseTime = CONFIG.combineDuration - 0.12;
+  state.visual.escapeMarker.remaining = 0.51;
   const thirdMidFlight = classicMemoryMotionPlan(state, 2);
   assert.equal(thirdMidFlight.inserting, true);
   assert.ok(thirdMidFlight.insertion > 0.45 && thirdMidFlight.insertion < 0.55);
   assert.equal(thirdMidFlight.alignment, 0);
 
-  state.phaseTime = CONFIG.combineDuration - 0.5;
+  state.phaseTime = CONFIG.combineDuration - 0.54;
+  state.visual.escapeMarker.remaining = 0.18;
   const combined = classicMemoryMotionPlan(state, 2);
   assert.equal(combined.inserting, false);
   assert.equal(combined.alignment, 1);
