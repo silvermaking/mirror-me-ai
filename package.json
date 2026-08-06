@@ -10,6 +10,7 @@
     "assets:2d": "node tools/build-2d-sprites.mjs",
     "assets:sprites": "python3 tools/build-sprite-strips.py",
     "assets:sfx": "python3 tools/build-sfx-masters.py",
+    "assets:bgm": "python3 tools/build-bgm-master.py",
     "test": "node --test tests/*.test.mjs",
     "vendor:three": "node tools/vendor-three.mjs"
   }

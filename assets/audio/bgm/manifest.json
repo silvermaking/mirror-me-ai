@@ -1,0 +1,40 @@
+{
+  "license": "CC0-1.0",
+  "loop": {
+    "bytes": 1152044,
+    "channels": 1,
+    "durationMs": 24000,
+    "encoding": "PCM16",
+    "file": "kiln-breath-loop.wav",
+    "frames": 576000,
+    "loopEndFrame": 576000,
+    "loopStartFrame": 0,
+    "peakDbfs": -10.0,
+    "sampleRate": 24000,
+    "sha256": "3857c49497aec8268129bb6ff2c053fb0d5602f97ce728988856165e87976ccf"
+  },
+  "provenance": "Deterministic original procedural synthesis; no sampled third-party audio.",
+  "sectionsMs": [
+    [
+      0,
+      6000,
+      "observe"
+    ],
+    [
+      6000,
+      12000,
+      "pressure"
+    ],
+    [
+      12000,
+      18000,
+      "void"
+    ],
+    [
+      18000,
+      24000,
+      "restart"
+    ]
+  ],
+  "version": 1
+}
