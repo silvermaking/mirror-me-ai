@@ -50,12 +50,22 @@ node scripts/build-pages-variants.mjs
 
 ## 현재 authored 아트
 
-현재 challenger는 Blender나 생성 이미지에 의존하지 않습니다. 편집 가능한 SVG 파츠 네 장을 최초판 Canvas 관절과 피벗에 결합하며, 로딩 실패 시에도 최초판 절차 렌더링으로 즉시 플레이됩니다. 자산 좌표와 피벗 계약은 `src/classic-art-contract.mjs`에 있습니다.
+현재 통합 후보 challenger는 Blender에 의존하지 않습니다. 동작별 authored PNG body·검·파일드라이버 strip을 named anchor로 최초판 Canvas 전투에 결합하며, 자산 로딩이 실패하면 최초판 절차 렌더링으로 즉시 돌아갑니다. 현재 rig는 초기 키포즈 기준선이고 전체 액션 애니메이션 고도화는 다음 작업입니다.
+
+## 개발 이어가기
+
+새 Codex 작업에서 별도 인수인계 프롬프트를 기억할 필요가 없습니다. 저장소의 `AGENTS.md`와 [프로젝트 진행 원장](./docs/PROJECT_STATUS.md)이 현재 체크포인트·유일한 다음 작업·Goal 생성 기준을 보존합니다.
+
+- 현황만 보고 싶으면 자연스럽게 “어디까지 했어?”라고 묻습니다.
+- 이어서 실행하려면 “다음 작업 진행” 또는 “이어가”라고 말합니다.
+- 긴 작업은 구체적인 WORK-ID Goal로, 짧은 검수·문서 수정은 Goal 없이 진행됩니다.
 
 ## 기획 문서
 
 - [게임 기획](./docs/GAME_DESIGN.md)
 - [첫 30초 수직 슬라이스](./docs/VERTICAL_SLICE.md)
+- [프로젝트 진행 원장](./docs/PROJECT_STATUS.md)
+- [현재 핸드페인티드 스프라이트 방향](./docs/design/SPRITE_REBUILD_DIRECTION.md)
 - [현재 classic asset challenger 방향](./docs/design/CLASSIC_ASSET_CHALLENGER.md)
 - [보관된 지도 2D 방향](./docs/design/2D_CHALLENGER_DIRECTION.md)
 - [보관된 3D 비교 기준](./docs/design/VISUAL_DIRECTION.md)

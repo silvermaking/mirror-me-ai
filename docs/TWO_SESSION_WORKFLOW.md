@@ -4,10 +4,12 @@
 
 **Session 1이 방향을 잠그고 결과를 판정하며, Session 2가 별도 worktree에서 구현한다.** 두 세션은 체크포인트마다 서로의 작업을 읽고 메시지를 주고받는다.
 
-| 세션 | 브랜치 | 소유 파일 | 현재 할 일 |
+Session 1과 Session 2는 고정된 채팅 번호가 아니라 역할이다. 새 세션은 `AGENTS.md`와 [`PROJECT_STATUS.md`](./PROJECT_STATUS.md)를 읽고 현재 역할·통합 후보·유일한 `NEXT`를 판별한다. 브랜치와 현재 할 일을 이 문서에 고정하지 않는다.
+
+| 역할 | 기준 위치 | 소유 파일 | 하는 일 |
 | --- | --- | --- | --- |
-| 1. 총괄 디렉팅 | 로컬 `main` | `docs/`, 방향 잠금, 구현 리뷰, 최종 병합 | 구현 작업 관찰, 장면 PASS/FAIL |
-| 2. 플레이어블 구현 | `codex/sprite-rebuild` worktree | `src/`, `tests/`, `index.html`, `styles.css`, `assets/2d/`, `assets/audio/`, 배포 구성 | 핸드페인티드 sprite → SFX → BGM → 최소 HUD 순서로 구현 |
+| 1. 총괄 디렉팅·통합 | 진행 원장의 통합 후보 브랜치 | `docs/`, `work/reviews/`, 방향 잠금, 구현 리뷰, 최종 병합 | `NEXT` 선택, 시안 판정, 구현 관찰, 상태 원장 갱신 |
+| 2. 플레이어블 구현 | 진행 원장의 기준 SHA에서 만든 항목별 `codex/<work-id>-<slug>` worktree | `src/`, `tests/`, `index.html`, `styles.css`, `assets/2d/`, `assets/audio/`, 배포 구성 | 잠긴 한 작업만 구현하고 증거와 SHA를 반환 |
 
 각 세션은 하위 에이전트를 최대 2명만 동시에 쓴다. Session 1은 `미술 제안 + 전투 가독성 검증`, Session 2는 `자산/렌더 구현 + 실제 플레이 QA`로 역할을 고정하며 같은 질문을 두 에이전트에게 반복시키지 않는다.
 
@@ -34,16 +36,18 @@ Session 1은 앱의 작업 읽기·대기·메시지 기능으로 Session 2를 �
 
 ## 운영 게이트
 
-1. Session 1이 `SPRITE_REBUILD_DIRECTION.md`의 선택 방향·금지 요소·대표 장면 계약·모션 타이밍·판정 보존 계약을 커밋한다. 생성 검토 이미지는 커밋하지 않는다.
-2. 공동 디렉터 승인 뒤 `DIRECTION LOCKED @ <commit SHA>`를 Session 2에 직접 보낸다.
-3. Session 2가 그 SHA를 기준으로 생성된 worktree에서 `ART FIRST PLAYABLE` 네 장면부터 구현한다.
+1. Session 1이 진행 원장의 단일 `NEXT`를 선택하고 방향·금지 요소·대표 장면 계약·모션 타이밍·판정 보존 계약을 커밋한다. 생성 검토 이미지는 커밋하지 않는다.
+2. 공동 디렉터 승인 뒤 `DIRECTION LOCKED @ <commit SHA> / WORK-ID`를 Session 2에 직접 보낸다.
+3. Session 2가 그 SHA를 기준으로 생성된 worktree에서 해당 WORK-ID만 구현한다.
 4. Session 1은 구현 파일을 고치지 않고 `320×180 무문구 정지화면`과 `무성 8초 인과`를 장면 단위 PASS/FAIL로 반환한다.
 5. 아트가 PASS한 뒤에만 `SFX PASS → BGM PASS → UI PASS`로 진행한다.
 6. 병합 순서는 `디자인 결정 → 아트/모션 → 음향 → UI → 교차 검증`이며 최종 병합은 한 세션만 담당한다.
 
+체크포인트가 바뀔 때마다 Session 1이 `PROJECT_STATUS.md`의 활성 작업, 상태, 검증 SHA와 다음 한 행동을 갱신한다. Goal이나 채팅은 진행 원장을 대신하지 않는다.
+
 ## 충돌 방지
 
-- Session 1은 `main`에서 게임 구현 파일을 직접 수정하지 않는다. 방향 문서와 검증된 구현의 최종 병합만 담당한다.
+- Session 1은 진행 원장의 통합 후보 브랜치에서 게임 구현 파일을 직접 수정하지 않는다. 방향 문서와 검증된 구현의 최종 병합만 담당한다.
 - 같은 파일을 양쪽 세션에서 동시에 수정하지 않는다.
 - 공용 파일은 소유 세션에 변경을 요청한다.
 - 커밋은 `design:`, `render:`, `gameplay:`, `test:` 단위로 분리한다.

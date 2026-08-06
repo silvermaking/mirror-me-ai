@@ -1,7 +1,21 @@
 # Mirror Me AI 협업 규칙
 
+## 모든 세션의 시작과 자율 재개
+
+- `AGENTS.md`는 변하지 않는 협업·품질 규칙이고, `docs/PROJECT_STATUS.md`는 현재 체크포인트와 다음 작업의 유일한 진행 원장이다. 새 세션은 반드시 `AGENTS.md → docs/PROJECT_STATUS.md → git status --short --branch → git log -5` 순서로 확인한다.
+- Session 1과 Session 2는 특정 채팅의 이름이 아니라 **역할**이다. 현재 브랜치·worktree·소유 파일로 역할을 판별하고, 역할이 불명확하면 구현을 시작하지 말고 먼저 `docs/PROJECT_STATUS.md`의 활성 작업을 정리한다.
+- 사용자가 `어디까지 했어`, `현황만`, `뭐가 남았어`처럼 상태만 물으면 `현재 / NEXT / 막힘`만 네 줄 이내로 답하고 파일이나 Goal을 바꾸지 않는다.
+- 사용자가 `다음 작업 진행`, `이어가`, `진행해`, `이제 다음 거 해`처럼 실행을 요청하면 추가 프롬프트를 요구하지 않는다. 진행 원장의 기존 `ACTIVE`를 재개하고, 없으면 `WAITING_REVIEW`, 그다음 정확히 하나의 `NEXT/READY` 순으로 맡는다.
+- 실행 항목이 두 개 이상의 체크포인트·여러 자동 계속 실행·하위 에이전트 협업·두 개 이상의 커밋을 요구하면 Goal을 만든다. 그보다 작은 문서 수정, 단일 검수와 한 번의 테스트는 Goal 없이 끝낸다.
+- Goal 이름은 `<WORK-ID>: <구체적 결과>; 완료 조건: <테스트·캡처·SHA>` 형식으로 만든다. `진행`, `품질 향상`, `게임 완성` 같은 무제한 Goal, 아트·오디오·HUD를 묶은 Goal, 완료 뒤 다음 단계까지 자동 확장하는 Goal은 금지한다.
+- `NEXT`는 항상 하나만 둔다. 파일 소유권이 겹치지 않는 병렬 항목만 별도 `READY`로 둘 수 있으며, 같은 항목이나 같은 파일을 다른 세션이 이미 맡았으면 검수 역할로 전환한다.
+- 시작 전 dirty worktree는 사용자 작업으로 간주해 보존한다. 진행 원장과 Git이 다르면 Git을 증거로 삼되, Session 1 역할이 원장을 먼저 교정한다.
+- 각 체크포인트는 테스트·캡처·커밋 SHA와 정확한 다음 행동을 원장에 남긴다. 중단되거나 Goal이 삭제되어도 새 세션이 원장만으로 이어갈 수 있어야 한다.
+- 사용자 확인은 dirty 변경 충돌, 서로 다른 방향 계약, 외부 권한, 공동 디렉터의 취향 결정처럼 안전하게 추론할 수 없는 경우에만 요청한다. 그 외에는 기록된 `NEXT`를 자율적으로 진행한다.
+
 ## 현재 단계
 
+- 시간에 따라 변하는 브랜치·완료 항목·활성 작업·`NEXT`는 이 절에 덧붙이지 않고 `docs/PROJECT_STATUS.md`에서만 갱신한다.
 - 3D Kiln Reliquary 런타임은 `codex/archive-3d-runtime` @ `630e0da`에 비교 기준으로 보존한다. 삭제하거나 같은 브랜치에서 2D로 덮어쓰지 않는다.
 - 현재 제작 대상은 공동 디렉터가 요청한 **최초판 게임필 + 핸드페인티드 2D 스프라이트 challenger**다. 최상위 아트 계약은 `docs/design/SPRITE_REBUILD_DIRECTION.md`를 따르고, `docs/design/CLASSIC_ASSET_CHALLENGER.md`는 게임필·좌표·fallback 비교 기준으로 보존한다.
 - 최초 완성판 `e63f7a0`의 연속 Canvas 움직임과 게임필을 절대 비교 기준으로 삼고, 현재 지도 2D판은 `d745fa4`에 비교 기준으로 보존한다.
@@ -56,13 +70,14 @@
 ## 두 세션 운영
 
 - 두 세션은 같은 작업을 나누지 않는다. **Session 1은 총괄 디렉팅·통합**, **Session 2는 플레이어블 구현**을 소유한다.
-- Session 1은 로컬 `main`에서 기획 잠금, 구현 리뷰와 최종 병합만 담당한다. 게임 구현 파일을 직접 고치지 않는다.
-- Session 2는 별도 Git worktree와 구현 브랜치에서만 작업한다. 같은 파일을 두 세션이 동시에 수정하지 않는다.
+- Session 1은 `docs/PROJECT_STATUS.md`에 기록된 통합 후보 브랜치에서 기획 잠금, 구현 리뷰와 최종 병합만 담당한다. 로컬 `main`이 최신이라고 가정하지 않으며 게임 구현 파일을 직접 고치지 않는다.
+- Session 2는 진행 원장의 기준 SHA에서 만든 별도 Git worktree와 항목별 `codex/<work-id>-<slug>` 브랜치에서만 작업한다. 같은 파일을 두 세션이 동시에 수정하지 않는다.
 - Session 1은 `gpt-5.6-sol / ultra`, Session 2는 `gpt-5.6-terra / high`를 기본으로 한다. 구현이 반복해서 막히는 경우에만 Session 1이 Sol 검토를 수행한다.
 - 각 세션의 동시 하위 에이전트는 최대 2명으로 제한한다. 한 명은 제안, 한 명은 PASS/FAIL 검증을 맡고 같은 질문을 중복 조사하지 않는다.
 - 하위 에이전트의 디렉터 전달물은 `결론 한 문장 + 근거 최대 다섯 줄`로 제한한다.
 - Session 1은 `docs/`, `work/reviews/`, 콘셉트 자료를 소유하고 구현 파일에는 리뷰만 남긴다.
 - Session 2는 `src/`, `tests/`, `index.html`, `styles.css`, `assets/2d/`와 배포 구성을 소유한다. 기존 `assets/3d/`와 Blender 원본은 보존하며 기획 문서를 임의로 바꾸지 않는다.
+- `docs/PROJECT_STATUS.md`의 최종 상태 변경은 Session 1이 소유한다. Session 2는 자기 브랜치의 체크포인트를 보고하고, Session 1이 실제 검증 뒤 `DONE`, `FIX_REQUIRED` 또는 다음 `READY`를 기록한다.
 - Session 2는 `DIRECTION LOCKED @ <commit SHA>`를 받은 뒤 구현을 시작한다.
 - Session 2는 `PLAN READY`, `FIRST PLAYABLE`, `REVIEW READY @ <commit SHA>`, `NEEDS DECISION` 체크포인트로 보고한다.
 - Session 1은 다른 작업을 읽고 기다리며 직접 후속 메시지를 보낸다. 공동 디렉터가 두 작업 사이에서 내용을 복사하지 않게 한다.
