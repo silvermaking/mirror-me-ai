@@ -6,13 +6,13 @@
 
 플레이어는 선택지를 고르는 관찰자가 아니다. 고정 쿼터뷰 전장에서 캐릭터를 직접 움직이고, 공격하고, 대시해 AI 보스를 쓰러뜨린다. 기존 기획에서 유지하는 것은 `행동의 흔적 → AI 기억 → 미래 잔상 → LOCK → 결과 확인 → 즉시 재도전`의 인과뿐이다.
 
-### 최초판 + authored 2D 에셋 방향 잠금
+### 최초판 게임필 + 핸드페인티드 2D 스프라이트 방향 잠금
 
-새 제작 기준은 **최초 완성판 `e63f7a0`의 플레이 감각을 먼저 복원하고, 연속 Canvas 모션을 해치지 않는 작은 authored 2D 파츠만 결합하는 challenger**다. 기존 3D판과 지도 2D판은 비교 대상으로 보존한다.
+새 제작 기준은 **최초 완성판 `e63f7a0`의 플레이 감각을 복원한 상태에서, 조립식 SVG 컷아웃을 한 몸으로 읽히는 전신 키포즈 스프라이트로 교체하는 challenger**다. 기존 3D판, 지도 2D판과 SVG 컷아웃판은 비교 대상으로 보존한다.
 
-게임 규칙은 바꾸지 않는다. 위험 예고, 대시 흔적, 검 궤적, 관절 반동은 최초판 렌더링을 기준으로 하고, 보스 외피·파일드라이버·플레이어 망토·기억 장치·충격 파편만 피벗 기반 SVG 컷아웃으로 고도화한다. Blender, GLB, 전신 고정 포즈 atlas와 생성 검토 이미지는 새 런타임에 사용하지 않는다.
+게임 규칙은 바꾸지 않는다. 위험 예고, 대시 흔적, 검 접촉, LOCK 좌표와 충돌 타이밍은 최초판과 현재 `game-core`를 기준으로 한다. 플레이어는 몸 앞의 검과 코발트 망토가 한 자세로 읽혀야 하고, 보스는 세 기억 명판과 한쪽 거대 파일드라이버가 한 신체로 연결된 `기억 처형기`로 다시 만든다. 각 사건은 부품 회전이 아니라 서로 다른 큰 전신 실루엣으로 보여 준다.
 
-자세한 시각·모션·fallback·PASS 계약은 `docs/design/CLASSIC_ASSET_CHALLENGER.md`를 따른다. `docs/design/2D_CHALLENGER_DIRECTION.md`와 `docs/design/VISUAL_DIRECTION.md`는 이전 비교 방향으로 보존한다.
+ImageGen 결과는 캐릭터 마스터와 키포즈를 합의하는 자료다. 대표 장면을 잘라 런타임에 사용하지 않으며, 실제 자산은 동작별 원본을 정체성·시점·팔레트·anchor 기준으로 정리한 뒤 결정적 strip build로 만든다. 자세한 아트·스프라이트·음향·대시보드·PASS 계약은 `docs/design/SPRITE_REBUILD_DIRECTION.md`를 따른다. `docs/design/CLASSIC_ASSET_CHALLENGER.md`, `docs/design/2D_CHALLENGER_DIRECTION.md`와 `docs/design/VISUAL_DIRECTION.md`는 비교 기준으로 보존한다.
 
 ## 1. 게임의 한 문장
 

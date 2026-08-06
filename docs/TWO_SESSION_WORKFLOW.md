@@ -7,9 +7,9 @@
 | 세션 | 브랜치 | 소유 파일 | 현재 할 일 |
 | --- | --- | --- | --- |
 | 1. 총괄 디렉팅 | 로컬 `main` | `docs/`, 방향 잠금, 구현 리뷰, 최종 병합 | 구현 작업 관찰, 장면 PASS/FAIL |
-| 2. 플레이어블 구현 | `codex/2d-challenger` worktree | `src/`, `tests/`, `index.html`, `styles.css`, `assets/2d/`, 배포 구성 | 지도 판타지 authored 2D 플레이어블 구현 |
+| 2. 플레이어블 구현 | `codex/sprite-rebuild` worktree | `src/`, `tests/`, `index.html`, `styles.css`, `assets/2d/`, `assets/audio/`, 배포 구성 | 핸드페인티드 sprite → SFX → BGM → 최소 HUD 순서로 구현 |
 
-각 세션은 하위 에이전트를 최대 2명만 동시에 쓴다. Session 1은 `미술 제안 + 전투 가독성 검증`, Session 2는 `구현 + 판정 테스트`로 역할을 고정하며 같은 질문을 두 에이전트에게 반복시키지 않는다.
+각 세션은 하위 에이전트를 최대 2명만 동시에 쓴다. Session 1은 `미술 제안 + 전투 가독성 검증`, Session 2는 `자산/렌더 구현 + 실제 플레이 QA`로 역할을 고정하며 같은 질문을 두 에이전트에게 반복시키지 않는다.
 
 ## 모델 배정
 
@@ -34,11 +34,12 @@ Session 1은 앱의 작업 읽기·대기·메시지 기능으로 Session 2를 �
 
 ## 운영 게이트
 
-1. Session 1이 선택 방향·금지 요소·대표 장면 계약·모션 타이밍·판정 보존 계약을 커밋한다. 생성 검토 이미지는 커밋하지 않는다.
+1. Session 1이 `SPRITE_REBUILD_DIRECTION.md`의 선택 방향·금지 요소·대표 장면 계약·모션 타이밍·판정 보존 계약을 커밋한다. 생성 검토 이미지는 커밋하지 않는다.
 2. 공동 디렉터 승인 뒤 `DIRECTION LOCKED @ <commit SHA>`를 Session 2에 직접 보낸다.
-3. Session 2가 그 SHA를 기준으로 생성된 worktree에서 구현을 시작한다.
-4. Session 1은 구현 파일을 고치지 않고 장면 단위 PASS/FAIL만 반환한다.
-5. 병합 순서는 `디자인 결정 → 구현 → 교차 검증`이며 최종 병합은 한 세션만 담당한다.
+3. Session 2가 그 SHA를 기준으로 생성된 worktree에서 `ART FIRST PLAYABLE` 네 장면부터 구현한다.
+4. Session 1은 구현 파일을 고치지 않고 `320×180 무문구 정지화면`과 `무성 8초 인과`를 장면 단위 PASS/FAIL로 반환한다.
+5. 아트가 PASS한 뒤에만 `SFX PASS → BGM PASS → UI PASS`로 진행한다.
+6. 병합 순서는 `디자인 결정 → 아트/모션 → 음향 → UI → 교차 검증`이며 최종 병합은 한 세션만 담당한다.
 
 ## 충돌 방지
 
