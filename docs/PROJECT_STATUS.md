@@ -7,7 +7,7 @@
 - 갱신일: 2026-08-07
 - 통합 후보 브랜치: `codex/classic-asset-challenger`
 - 검증된 플레이어블 기준: `6477d91` — 이 원장과 운영 문서 커밋은 이 SHA 위에 쌓일 수 있다.
-- 검증된 개발환경 기준: `c425d00`, 컨테이너 CI 게이트 `fb87924`
+- 검증된 개발환경 기준: `c425d00`, 컨테이너 CI 게이트 `fb87924`; GitHub Actions run `31134502211` PASS
 - 공개 배포 기준: `origin/main` @ `cee7cd1` — 통합 후보의 후속 커밋은 아직 `main`에 병합·배포하지 않았다.
 - 현재 단계: 최초판 게임필 위에 초기 authored PNG 캐릭터 rig, SFX, BGM, 최소 HUD와 첫 회피 가독성까지 통합된 플레이어블 기준선
 - 방향 기준: `docs/design/SPRITE_REBUILD_DIRECTION.md`
@@ -62,7 +62,7 @@
 | `SFX-01` | `680a210` | 로컬 authored 사건음과 oscillator fallback |
 | `BGM-01` | `0a0bb4e` | 정적 한-loop BGM, 사건 ducking과 결정적 build |
 | `UX-01` | `6477d91` | 최소 HUD, 첫 회피 인과, 터치·재도전 가독성; 153 tests PASS |
-| `DEVENV-01` | `c425d00`, `fb87924` | Node 24.14·Python 3.11·pnpm 11.16, Docker Compose·Dev Container, 교차 플랫폼 서버·검증 명령과 CI 컨테이너 빌드 게이트; fresh clone PASS |
+| `DEVENV-01` | `c425d00`, `fb87924` | Node 24.14·Python 3.11·pnpm 11.16, Docker Compose·Dev Container, 교차 플랫폼 서버·검증 명령과 CI 컨테이너 빌드; fresh clone와 Actions run `31134502211` PASS |
 
 ## 진행 원장 갱신 규칙
 
