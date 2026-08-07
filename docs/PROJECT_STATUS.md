@@ -4,10 +4,11 @@
 
 ## 현재 스냅샷
 
-- 갱신일: 2026-08-06
+- 갱신일: 2026-08-07
 - 통합 후보 브랜치: `codex/classic-asset-challenger`
 - 검증된 플레이어블 기준: `6477d91` — 이 원장과 운영 문서 커밋은 이 SHA 위에 쌓일 수 있다.
-- 공개 배포 기준: `origin/main` @ `cee7cd1` — 통합 후보 13개 커밋은 아직 `main`에 병합·배포하지 않았다.
+- 검증된 개발환경 기준: `c425d00`, 컨테이너 CI 게이트 `fb87924`
+- 공개 배포 기준: `origin/main` @ `cee7cd1` — 통합 후보의 후속 커밋은 아직 `main`에 병합·배포하지 않았다.
 - 현재 단계: 최초판 게임필 위에 초기 authored PNG 캐릭터 rig, SFX, BGM, 최소 HUD와 첫 회피 가독성까지 통합된 플레이어블 기준선
 - 방향 기준: `docs/design/SPRITE_REBUILD_DIRECTION.md`
 - **NEXT: `ART-02A` — 전신 액션 키포즈 팩과 모션 기준 잠금**
@@ -42,9 +43,10 @@
 
 ## 검증 기준선
 
-- 자동 테스트: `6477d91`에서 153/153 PASS
+- 자동 테스트: fresh clone `fb87924`에서 153/153 PASS
 - 게임 코어: 최종 HUD 커밋에서 `src/game-core.mjs`와 기존 core tests 변경 없음
 - 정적 Pages 산출물: 현재 후보·`e63f7a0` 최초판·`630e0da` 3D 보관판 세 경로 빌드 PASS
+- fresh clone 환경: 빈 `node_modules`·격리 pnpm store에서 `three@0.180.0` 설치, 153 tests, 세 Pages 변형, 정적 서버 HTTP 200 PASS
 - 브라우저 콘솔·정적 자산 경로: 오류 없음, 런타임 외부 CDN 요청 없음
 - `320×180` 자동·에이전트 장면 검수: 현재 기준선 PASS
 - 남은 사람 검수: 5명 중 4명 가독성 기준, 무성 8초 인과, 화면 없는 사건음, 모바일 실제 손 입력은 아직 완료 증거가 없다.
@@ -60,6 +62,7 @@
 | `SFX-01` | `680a210` | 로컬 authored 사건음과 oscillator fallback |
 | `BGM-01` | `0a0bb4e` | 정적 한-loop BGM, 사건 ducking과 결정적 build |
 | `UX-01` | `6477d91` | 최소 HUD, 첫 회피 인과, 터치·재도전 가독성; 153 tests PASS |
+| `DEVENV-01` | `c425d00`, `fb87924` | Node 24.14·Python 3.11·pnpm 11.16, Docker Compose·Dev Container, 교차 플랫폼 서버·검증 명령과 CI 컨테이너 빌드 게이트; fresh clone PASS |
 
 ## 진행 원장 갱신 규칙
 
