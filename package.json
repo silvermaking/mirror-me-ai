@@ -3,12 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
   "dependencies": {
     "three": "0.180.0"
   },
   "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "verify": "node scripts/verify.mjs",
+    "pages:build": "node scripts/build-pages-variants.mjs",
     "assets:2d": "node tools/build-2d-sprites.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test",
     "vendor:three": "node tools/vendor-three.mjs"
   }
 }

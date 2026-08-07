@@ -1,0 +1,22 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    init: true
+    user: node
+    working_dir: /workspace
+    environment:
+      MIRROR_ME_HOST: 0.0.0.0
+      MIRROR_ME_PORT: 4173
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+      - pnpm_store:/home/node/.local/share/pnpm/store
+    ports:
+      - "4173:4173"
+    command: ["sh", "-lc", "pnpm install --frozen-lockfile && pnpm dev"]
+
+volumes:
+  node_modules:
+  pnpm_store:

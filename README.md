@@ -24,24 +24,47 @@
 
 ## 로컬 실행
 
-ES modules를 사용하므로 파일을 직접 열지 말고 저장소 루트에서 정적 서버를 실행합니다.
+### Docker 또는 Dev Container — 권장
+
+Windows, macOS, Linux에서 Docker를 사용할 수 있다면 호스트의 Node·Python 설치와 무관하게 같은 환경을 사용합니다.
 
 ```bash
-python3 -m http.server 4173
+git clone https://github.com/silvermaking/mirror-me-ai.git
+cd mirror-me-ai
+docker compose up --build
 ```
 
-그다음 <http://localhost:4173>을 엽니다.
+<http://localhost:4173>에서 실행됩니다. VS Code나 호환 IDE에서는 저장소를 연 뒤 **Reopen in Container**를 선택하고 `pnpm dev`를 실행합니다.
+
+전체 검증은 같은 컨테이너에서 실행합니다.
+
+```bash
+docker compose run --rm dev pnpm verify
+```
+
+### 네이티브 환경
+
+`.nvmrc`의 Node 24.14.0과 `.python-version`의 Python 3.11을 사용합니다. Python은 아트·음향 자산을 다시 만들 때만 필요합니다. pnpm 버전은 `package.json`에 고정되어 있습니다.
+
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm verify
+pnpm dev
+```
+
+Corepack이 없는 Node 배포판은 `npm install --global pnpm@11.16.0`을 한 번 실행합니다.
 
 ## 테스트
 
 ```bash
-node --test tests/*.test.mjs
+pnpm test
 ```
 
 세 버전의 Pages 산출물을 로컬에서 확인하려면 다음을 실행합니다.
 
 ```bash
-node scripts/build-pages-variants.mjs
+pnpm pages:build
 ```
 
 생성 결과는 Git에서 제외되는 `.pages-dist/`에 저장됩니다.

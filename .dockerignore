@@ -1,0 +1,7 @@
+.git
+.pages-dist
+.pnpm-store
+node_modules
+work
+coverage
+*.log
