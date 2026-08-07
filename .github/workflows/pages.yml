@@ -28,8 +28,13 @@ jobs:
           node-version-file: .nvmrc
       - name: Verify tests and static variants
         run: node scripts/verify.mjs
+      - name: Validate reproducible development container
+        run: |
+          docker compose config --quiet
+          docker compose build dev
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     environment:
