@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up pinned Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
       - name: Verify tests and static variants
@@ -46,7 +46,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up pinned Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
       - name: Build three playable versions
