@@ -3,15 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
   "dependencies": {
     "three": "0.180.0"
   },
   "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "verify": "node scripts/verify.mjs",
+    "pages:build": "node scripts/build-pages-variants.mjs",
     "assets:2d": "node tools/build-2d-sprites.mjs",
-    "assets:sprites": "python3 tools/build-sprite-strips.py",
-    "assets:sfx": "python3 tools/build-sfx-masters.py",
-    "assets:bgm": "python3 tools/build-bgm-master.py",
-    "test": "node --test tests/*.test.mjs",
+    "assets:sprites": "node scripts/run-python.mjs tools/build-sprite-strips.py",
+    "assets:sfx": "node scripts/run-python.mjs tools/build-sfx-masters.py",
+    "assets:bgm": "node scripts/run-python.mjs tools/build-bgm-master.py",
+    "test": "node --test",
     "vendor:three": "node tools/vendor-three.mjs"
   }
 }

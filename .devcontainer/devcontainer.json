@@ -1,0 +1,17 @@
+{
+  "name": "Mirror Me AI",
+  "dockerComposeFile": "../compose.yaml",
+  "service": "dev",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "node",
+  "overrideCommand": true,
+  "shutdownAction": "stopCompose",
+  "postCreateCommand": "pnpm install --frozen-lockfile",
+  "forwardPorts": [4173],
+  "portsAttributes": {
+    "4173": {
+      "label": "Mirror Me AI",
+      "onAutoForward": "openPreview"
+    }
+  }
+}
